@@ -1,12 +1,14 @@
 import os
 from datetime import datetime
 from pathlib import Path
+import threading
 
 import pandas as pd
 from dotenv import load_dotenv
 
 import partner_processing as pp
 from checks import generate_report
+from forVats.process import process
 
 
 load_dotenv()
@@ -15,12 +17,16 @@ def create_paths():
     directory = Path(os.getenv("DIRECTORY_LOCATION", "")).expanduser()
     input_file = os.getenv("INPUT_FILE")
     names_file = os.getenv("NAMES_FILE")
-    today = datetime.now().strftime("%Y-%m-%d_%H-%M_VAT")
+    today = datetime.now().strftime("%Y-%m-%d_%H-%M_REPORT")
     output_dir = directory / today
+    siren_directory = output_dir / "siren_siret"
+    VAT_directory = output_dir / "vat"
     output_dir.mkdir(parents=True, exist_ok=True)
+    siren_directory.mkdir(parents=True, exist_ok=True)
+    VAT_directory.mkdir(parents=True, exist_ok=True)
     input_path = os.path.join(directory, input_file)
     names_path = os.path.join(directory, names_file)
-    return input_path, names_path, output_dir
+    return input_path, names_path, output_dir, siren_directory, VAT_directory
 
 
 def detect_skiprows(file_path: Path) -> int:
@@ -34,7 +40,7 @@ def detect_skiprows(file_path: Path) -> int:
 
 
 def main():
-    input_path, names_path, output_dir = create_paths()
+    input_path, names_path, output_dir, siren_directory, VAT_directory= create_paths()
     skip = detect_skiprows(r"\\interfacessap.file.core.windows.net\interfacess4p\data_mdm_export\BP_TAXNUM.csv")
     df = pd.read_csv(
         r"\\interfacessap.file.core.windows.net\interfacess4p\data_mdm_export\BP_TAXNUM.csv",
@@ -48,8 +54,7 @@ def main():
         engine="python",
     )
     df["value"] = df["value"].astype(str)
-    print(df.head())
-    df = df[df["type"].isin(["FR1", "FR2"])].copy()
+    df = df[df["type"].isin(["FR0", "FR1", "FR2"])].copy()
     df = (
         df.pivot_table(
             index="BP",
@@ -58,12 +63,27 @@ def main():
             aggfunc="first",
         )
         .reset_index()
-        .rename(columns={"FR1": "siret", "FR2": "siren"})
+        .rename(columns={"FR0" : "VAT", "FR1": "siret", "FR2": "siren"})
     )
-    print(df.head())
+    # Ensure the VAT column exists even if FR0 was missing from the source file
+    if "VAT" not in df.columns:
+        df["VAT"] = ""
 
     merged, merged_path = pp.build_partner_dataset(df=df, infos_path=names_path, output_dir=output_dir)
-    generate_report(merged, output_dir)
+    print(merged["VAT"].describe())
+    # Run SIREN/SIRET and VAT flows in parallel threads
+    siren_thread = threading.Thread(
+        target=generate_report,
+        kwargs={"output": merged, "input_dir": output_dir, "output_dir": siren_directory},
+    )
+    vat_thread = threading.Thread(
+        target=process,
+        kwargs={"df": merged, "vat_column": "VAT", "output_dir": VAT_directory},
+    )
+    siren_thread.start()
+    vat_thread.start()
+    siren_thread.join()
+    vat_thread.join()
 
 
 if __name__ == "__main__":

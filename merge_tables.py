@@ -43,7 +43,6 @@ def merge_df(datas : pd.DataFrame, infos_part : pd.DataFrame):
     infos_part = infos_part.rename(columns={'Business Partner': 'BP'})
     merged = pd.merge(datas, infos_part, on='BP', how='outer')
 
-    merged['datas'] = 'Everything is valid'
 
     # Appliquer les fonctions de concaténation et supprimer les colonnes d'origine.
     infos_part['Name 1'] = infos_part.apply(concat_names, axis=1)

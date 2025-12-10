@@ -5,21 +5,31 @@ import requests as rq
 from requests.exceptions import RequestException
 
 
-def _get_with_retry(url: str, retries: int = 3, delay: float = 1.0) -> rq.Response:
+def _get_with_retry(url: str, delay: float = 3.0, max_duration: float = 600.0) -> rq.Response:
+    """
+    Retry GET until success or max_duration (seconds) is reached.
+    delay: seconds between attempts (default 3s)
+    max_duration: total retry window (default 10 minutes)
+    """
+    start = time.time()
+    attempt = 0
     last_exc = None
-    for attempt in range(1, retries + 1):
+    while time.time() - start < max_duration:
+        attempt += 1
         try:
             resp = rq.get(url, timeout=10)
             if resp.status_code >= 500:
+                print(f"[WARN] Retry {attempt}: HTTP {resp.status_code} for {url} (server error)")
                 time.sleep(delay)
                 continue
             return resp
         except RequestException as exc:
             last_exc = exc
+            print(f"[WARN] Retry {attempt}: network error {exc} for {url}")
             time.sleep(delay)
     if last_exc:
-        raise RuntimeError(f"Échec réseau après {retries} tentatives : {last_exc}") from last_exc
-    raise RuntimeError(f"Impossible de joindre l'API après {retries} tentatives")
+        raise RuntimeError(f"Échec réseau après {attempt} tentatives (~{max_duration}s) : {last_exc}") from last_exc
+    raise RuntimeError(f"Impossible de joindre l'API après ~{max_duration}s")
 
 
 def handlesiren(siren: str) -> Dict[str, Any]:

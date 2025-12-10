@@ -1,0 +1,42 @@
+"""Module to concatenate multiple Excel reports into a single file."""
+
+import os
+from pathlib import Path
+
+import openpyxl
+import pandas as pd
+
+
+def log_vat(message: str):
+    print(f"[VATS] {message}")
+
+
+def main(work_dir: str):
+    """
+    Merge all Excel reports in the ``reports`` directory into a single Excel file.
+
+    :param work_dir: Base directory containing the ``reports`` folder.
+    """
+    reports_dir = Path(work_dir) / "reports"
+    output_file = Path(work_dir) / "report_concatenated.xlsx"
+
+    all_dfs = []
+
+    for file_name in sorted(os.listdir(reports_dir)):
+        if not file_name.lower().endswith((".xls", ".xlsx")):
+            continue
+
+        file_path = reports_dir / file_name
+        log_vat(f"Reading {file_name}")
+
+        df = pd.read_excel(file_path)
+        df["__source_file__"] = file_name
+        all_dfs.append(df)
+
+    if not all_dfs:
+        log_vat("Aucun fichier excel a concatener.")
+        return
+
+    merged = pd.concat(all_dfs, ignore_index=True)
+    merged.to_excel(output_file, index=False)
+    log_vat(f"Fichier final cree : {output_file}")

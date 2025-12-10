@@ -184,35 +184,6 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
                 startrow=1,
             )
 
-
-def _ensure_template(report_file: str):
-    """
-    S'assure qu'un fichier de rapport valide existe à l'emplacement spécifié.
-    S'il n'existe pas, ou s'il est corrompu, ou s'il manque la feuille "Report",
-    un nouveau modèle est créé (en préservant les données si possible).
-    Args:
-        report_file (str): Le chemin vers le fichier de rapport à vérifier.
-    """
-    if not os.path.exists(report_file):
-        _build_template(report_file)
-        return
-
-    try:
-        wb = load_workbook(report_file)
-    except Exception:
-        _build_template(report_file)
-        return
-
-    if "Report" in wb.sheetnames:
-        return
-
-    try:
-        existing = pd.read_excel(report_file)
-    except Exception:
-        existing = pd.DataFrame(columns=REPORT_COLUMNS)
-    _build_template(report_file, existing)
-
-
 # Variante robuste : reconstruit si la feuille/les colonnes ne correspondent pas au gabarit.
 def _ensure_template_v2(report_file: str):
     if not os.path.exists(report_file):
@@ -284,7 +255,7 @@ def resume_checks(processed_path: str, report_path: str, update_status=None):
         update_status("Tout est déjà traité dans le rapport.")
         return report_path
 
-    output_dir = os.path.dirname(report_path) or "."
+    input_dir = os.path.dirname(report_path) or "."
     # Ensure template and existing data are in place before appending.
     _ensure_template_v2(report_path)
 
@@ -293,7 +264,7 @@ def resume_checks(processed_path: str, report_path: str, update_status=None):
     # Append only the missing rows.
     return generate_report(
         remaining,
-        output_dir,
+        input_dir,
         update_status=update_status,
         report_path=report_path,
     )
@@ -439,7 +410,8 @@ def reports_col(row):
 
 def generate_report(
     output: pd.DataFrame,
-    output_dir: str,
+    input_dir: str,
+    output_dir : str,
     update_status=None,
     report_path: Optional[str] = None,
 ):
@@ -453,7 +425,7 @@ def generate_report(
 
     Args:
         output (pd.DataFrame): Le DataFrame contenant les données des partenaires traitées.
-        output_dir (str): Le répertoire où le rapport sera sauvegardé.
+        input_dir (str): Le répertoire où le rapport sera sauvegardé.
         update_status (callable, optional): Fonction de rappel pour les mises à jour de statut.
         report_path (Optional[str]): Chemin explicite vers le fichier de rapport. S'il est fourni,
                                      les nouvelles lignes seront ajoutées à ce fichier.
@@ -499,25 +471,25 @@ def generate_report(
                 siren = siren.split(".")[0]
 
             update_status(f"Verification {idx+1}/{n_out} : partenaire {BP}")
-            log(f"[INFO] Checking {idx+1}/{n_out} BP={BP} siren={siren} siret={siret}")
+            log(f"[SIREN-SIRET] Checking {idx+1}/{n_out} BP={BP} siren={siren} siret={siret}")
 
             # Case 1: missing/invalid SIRET -> check SIREN only
             # Si le SIRET est manquant ou invalide, on ne vérifie que le SIREN.
             if siret.lower() in ("", "none") or "invalid input" in siret.lower() or siret.lower() == "nan":
                 siren_line = _siren_only(row, BP, siren)
                 report = write_line(writer, report, siren_line, report_file)
-                log(f"[INFO]   -> SIREN only status={siren_line.get('status', [''])[0]}")
+                log(f"[SIREN-SIRET]   -> SIREN only status={siren_line.get('status', [''])[0]}")
 
             # Case 2: SIRET present but not starting with SIREN -> check both SIREN and SIRET
             # Si le SIREN et le SIRET ne correspondent pas, les deux sont vérifiés séparément.
             elif siret[:9] != siren and not (siren in ("", "None") or "Invalid input" in siren):
                 siren_line = _siren_only(row, BP, siren)
                 report = write_line(writer, report, siren_line, report_file)
-                log(f"[INFO]   -> SIREN check status={siren_line.get('status', [''])[0]}")
+                log(f"[SIREN-SIRET]   -> SIREN check status={siren_line.get('status', [''])[0]}")
 
                 siret_line = _siret_only(row, BP, siret)
                 report = write_line(writer, report, siret_line, report_file)
-                log(f"[INFO]   -> SIRET check status={siret_line.get('status', [''])[0]}")
+                log(f"[SIREN-SIRET]   -> SIRET check status={siret_line.get('status', [''])[0]}")
 
             # Case 3: SIRET present and starts with SIREN -> check SIRET only
             # Si le SIRET est présent et semble valide (commence par le SIREN), on ne vérifie que le SIRET.
@@ -525,7 +497,7 @@ def generate_report(
                 siret_line = _siret_only(row, BP, siret)
                 report = write_line(writer, report, siret_line, report_file)
                 siret_status = _get_status(siret_line)
-                log(f"[INFO]   -> SIRET only status={siret_status}")
+                log(f"[SIREN-SIRET]   -> SIRET only status={siret_status}")
                 # Cas particulier : si le SIRET est inactif, on effectue quand même une vérification du SIREN
                 # pour voir si l'unité légale elle-même est toujours active.
                 if siret_status not in ("Active", "Actif") and isinstance(siren, str) and len(siren) == 9:
