@@ -35,7 +35,14 @@ REPORT_COLUMNS = [
     "commune",
     "duplicates_siren",
     "duplicates_siret",
-    "valid",
+    "missing siren",
+    "missing siret",
+    "Missing_Vat",
+    "uses a snetor siren",
+    "uses a snetor siret",
+    "uses a snetor VAT",
+    "Missmatching siren siret",
+    "Missmatching siren VAT",
     "Grouping",
     "Country/Region Key",
     "Language Key",
@@ -103,8 +110,23 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
         # --- Règles de formatage conditionnel ---
         # Ces règles colorent les lignes en fonction de combinaisons de statuts, de validité et de doublons.
         # La plage est définie de manière très large pour couvrir la plupart des cas d'utilisation.
-        range_ref = f"A2:AI{MAX_FORMAT_ROWS}"
+        range_ref = f"A2:AJ{MAX_FORMAT_ROWS}"
 
+        # Flags (colonnes W -> AD) doivent tous être FALSE pour considérer la ligne "clean".
+        flags_all_false = (
+            "AND("
+            '$W2="False",'
+            '$X2="False",'
+            '$Y2="False",'
+            '$Z2="False",'
+            '$AA2="False",'
+            '$AB2="False",'
+            '$AC2="False",'
+            '$AD2="False")'
+        )
+        flags_any_true = f"NOT({flags_all_false})"
+
+        # Jaune : actif, aucun flag, mais des doublons.
         worksheet.conditional_format(
             range_ref,
             {
@@ -112,7 +134,7 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
                 "criteria": (
                     '=AND('
                     'OR($F2="Actif",$F2="Active"),'
-                    '$W2="All good",'
+                    f'{flags_all_false},'
                     'OR($U2<>"[]",$V2<>"[]")'
                     ')'
                 ),
@@ -121,6 +143,7 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
             },
         )
 
+        # Orange : actif, au moins un flag, doublons vides.
         worksheet.conditional_format(
             range_ref,
             {
@@ -128,7 +151,7 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
                 "criteria": (
                     '=AND('
                     'OR($F2="Actif",$F2="Active"),'
-                    '$W2<>"All good",'
+                    f'{flags_any_true},'
                     '$U2="[]",'
                     '$V2="[]"'
                     ')'
@@ -138,37 +161,40 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
             },
         )
 
+        # Marron (dark_orange) : actif avec flags levés (peu importe les doublons).
         worksheet.conditional_format(
             range_ref,
             {
                 "type": "formula",
                 "criteria": (
-                    '=AND('
+                    "=AND("
                     'OR($F2="Actif",$F2="Active"),'
-                    '$W2<>"All good"'
-                    ')'
+                    f"{flags_any_true}"
+                    ")"
                 ),
                 "format": dark_orange,
                 "stop_if_true": True,
             },
         )
 
+        # Rouge : non actif.
+        worksheet.conditional_format(
+            range_ref,
+            {
+                "type": "formula",
+                "criteria": '=NOT(OR($F2="Actif",$F2="Active"))',
+                "format": red,
+            },
+        )
+
+        # Vert : actif, aucun flag, aucun doublon.
         worksheet.conditional_format(
             range_ref,
             {
                 "type": "formula",
                 "criteria": (
-                    '=NOT(OR($F2="Actif",$F2="Active"))'
+                    f'=AND(OR($F2="Actif",$F2="Active"), {flags_all_false}, $U2="[]", $V2="[]")'
                 ),
-                "format": red,
-            },
-        )
-
-        worksheet.conditional_format(
-            range_ref,
-            {
-                "type": "formula",
-                "criteria": '=AND(OR($F2="Actif",$F2="Active"), $W2="All good", $U2="[]", $V2="[]")',
                 "format": green,
             },
         )
@@ -393,14 +419,68 @@ def reports_col(row):
     Args:
         row (pd.DataFrame): Le DataFrame (généralement une seule ligne) à traiter.
     Returns:        pd.DataFrame: Le DataFrame avec les nouvelles colonnes de diagnostic."""
-    cond_active = row["status"].isin(["Actif", "Active"])
-    cond_all_good = row["valid"] == "All good"
+    # Garantit la présence des colonnes de flags ajoutées récemment.
+    for missing_col in [
+        "missing siren",
+        "missing siret",
+        "Missing_Vat",
+        "uses a snetor siren",
+        "uses a snetor siret",
+        "uses a snetor VAT",
+        "Missmatching siren siret",
+        "Missmatching siren VAT",
+    ]:
+        if missing_col not in row.columns:
+            row[missing_col] = False
 
-    row.loc[~cond_all_good & cond_active, "report"] = row.loc[
-        ~cond_all_good & cond_active, "valid"
+    cond_active = row["status"].isin(["Actif", "Active"])
+    def _as_bool(series: pd.Series) -> pd.Series:
+        return series.astype(str).str.lower().isin(["true", "1", "yes"])
+
+    bad_flags = (
+        _as_bool(row["missing siren"])
+        | _as_bool(row["missing siret"])
+        | _as_bool(row["Missing_Vat"])
+        | _as_bool(row["uses a snetor siren"])
+        | _as_bool(row["uses a snetor siret"])
+        | _as_bool(row["uses a snetor VAT"])
+        | _as_bool(row["Missmatching siren siret"])
+        | _as_bool(row["Missmatching siren VAT"])
+    )
+    cond_all_good = ~bad_flags
+
+    def _val_is_true(val) -> bool:
+        return str(val).lower() in ("true", "1", "yes")
+
+    def _flag_summary(row_idx):
+        parts = []
+        if _val_is_true(row.loc[row_idx, "missing siren"]):
+            parts.append("missing siren")
+        if _val_is_true(row.loc[row_idx, "missing siret"]):
+            parts.append("missing siret")
+        if _val_is_true(row.loc[row_idx, "Missing_Vat"]):
+            parts.append("Missing_Vat")
+        if _val_is_true(row.loc[row_idx, "uses a snetor siren"]):
+            parts.append("uses a snetor siren")
+        if _val_is_true(row.loc[row_idx, "uses a snetor siret"]):
+            parts.append("uses a snetor siret")
+        if _val_is_true(row.loc[row_idx, "uses a snetor VAT"]):
+            parts.append("uses a snetor VAT")
+        if _val_is_true(row.loc[row_idx, "Missmatching siren siret"]):
+            parts.append("Missmatching siren siret")
+        if _val_is_true(row.loc[row_idx, "Missmatching siren VAT"]):
+            parts.append("Missmatching siren VAT")
+        return ", ".join(parts) if parts else ""
+
+    summaries = pd.Series({_idx: _flag_summary(_idx) for _idx in row.index})
+
+    row.loc[~cond_all_good & cond_active, "report"] = summaries.loc[
+        ~cond_all_good & cond_active
     ]
     row.loc[cond_all_good & ~cond_active, "report"] = "All good but siret/siren not active"
-    row.loc[~cond_all_good & ~cond_active, "report"] = "Nothing is good"
+    row.loc[~cond_all_good & ~cond_active, "report"] = summaries.loc[
+        ~cond_all_good & ~cond_active
+    ]
     row.loc[cond_all_good & cond_active, "report"] = "Everything is valid"
 
     row["diagnostic_name"] = row.apply(compare_names, axis=1)

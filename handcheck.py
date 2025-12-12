@@ -29,7 +29,13 @@ def create_paths():
     VAT_directory.mkdir(parents=True, exist_ok=True)
     input_path = os.path.join(input_location, input_file)
     names_path = os.path.join(input_location, names_file)
-    return input_path, names_path, output_dir, siren_directory, VAT_directory
+    return (
+        input_path,
+        names_path,
+        output_dir,
+        siren_directory,
+        VAT_directory
+        )
 
 
 def detect_skiprows(file_path: Path) -> int:

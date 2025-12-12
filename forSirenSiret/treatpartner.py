@@ -47,40 +47,41 @@ def main(partner, df: pd.DataFrame):
         "VAT": vat,
         "duplicates_siren": doubles_siren,
         "duplicates_siret": doubles_siret,
-        "valid": "All good",
+        "missing siren": False,
+        "missing siret": False,
+        "Missing_Vat": False,
+        "Missmatching siren siret" : False,
+        "Missmatching siren VAT" : False,
+        "uses a snetor siren": False,
+        "uses a snetor siret": False,
+        "uses a snetor VAT": False,
     }
+    
+    if siren is None:
+        out["missing siren"] = True
+    if siret is None:
+        out["missing siret"] = True
+    if vat is None:
+        out["Missing_Vat"] = True
 
-    if siren is None or siret is None or vat is None:
-        out["valid"] = "Missing values :"
-        if siren is None:
-            out["valid"] += "siren "
-        if siret is None:
-            out["valid"] += "siret "
-        if vat is None:
-            out["valid"] += "VAT "
-        out["valid"] += "; "
-    else:
-        if siret[:9] != siren:
-            out["valid"] = "Missmatching siren siret"
-        if vat and len(vat) > 4 and vat[4:] != siren:
-            if out["valid"] == "All good":
-                out["valid"] = "Missmatching siren VAT"
-            else:
-                out["valid"] += " and missmatching siren VAT"
+    if siret and siren and siret[:9] != siren:
+        out["Missmatching siren siret"] = True
+    if vat and len(vat) > 4 and siren and vat[4:] != siren:
+        out["Missmatching siren VAT"] = True
 
     if siren is not None and len(siren) != 9:
         out["siren"] = f"Invalid input ({siren})"
-        out["valid"] += "Invalid siren length"
+        out["missing siren"] = True
     if siret is not None and len(siret) != 14:
         out["siret"] = f"Invalid input ({siret})"
-        out["valid"] += "invalid siret length"
+        out["missing siret"] = True
 
     if checkSnetor(siren):
-        out["valid"] += "uses a snetor siren ; "
+        out["uses a snetor siren"] = True
     if checkSnetor(siret):
-        out["valid"] += "uses a snetor siret ; "
+        out["uses a snetor siret"] = True
     if checkSnetor(vat):
-        out["valid"] += "uses a snetor VAT ; "
+        out["uses a snetor VAT"] = True
 
     return out
 

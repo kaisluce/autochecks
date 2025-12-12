@@ -62,6 +62,16 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, output_dir: str, up
     # Harmoniser la clé de jointure tout en conservant 'partner' pour le report.
     output["BP"] = output.get("partner", output.get("BP"))
     output = mt.merge_df(output, infos)
+    
+    # Filtre optionnel : exclure les lignes dont le nom contient "snetor".
+    name_col = "Name 1" if "Name 1" in output.columns else "Name1"
+    if name_col in output.columns:
+        mask1 = ~output[name_col].str.lower().fillna("").str.contains("snetor")
+        mask2 = ~output[name_col].str.lower().fillna("").str.contains("gazechim")
+        mask3 = ~output[name_col].str.upper().fillna("").str.contains("OZYANCE")
+        output = output.loc[mask1]
+        output = output.loc[mask2]
+        output = output.loc[mask3]
 
     output.to_excel(output_path, index=False)
     log(f"[INFO] Final partner dataset saved: {output_path} ({len(output)} rows)")
