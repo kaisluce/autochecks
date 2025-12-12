@@ -1,8 +1,8 @@
 import os
 import sys
 import pandas as pd
-import treatpartner as tp
-import merge_tables as mt
+import forSirenSiret.treatpartner as tp
+import forSirenSiret.merge_tables as mt
 
 
 def build_partner_dataset(df: pd.DataFrame, infos_path: str, output_dir: str, update_status=None):

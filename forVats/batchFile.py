@@ -55,7 +55,7 @@ def submit_batch_file(batch_file):
         
         # checks if the batch was rejected
         status = status_resp.json().get("status")
-
+        log_vat(f"Recieved token : {status}")
         if status.upper() == "PROCESSING":
             # if not rejected, return the status
             log_vat(f"Batch {batch_file} accepted, token {token}")

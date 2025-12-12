@@ -74,9 +74,6 @@ def main(partner, df: pd.DataFrame):
     if siret is not None and len(siret) != 14:
         out["siret"] = f"Invalid input ({siret})"
         out["valid"] += "invalid siret length"
-    if vat is not None and len(vat) != 13:
-        out["VAT"] = f"Invalid input ({vat})"
-        out["valid"] += "invalid VAT length"
 
     if checkSnetor(siren):
         out["valid"] += "uses a snetor siren ; "

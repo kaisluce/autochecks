@@ -10,6 +10,7 @@ import forVats.checkcomplete as cc
 import forVats.concat as ct
 import forVats.multibash as mb
 import forVats.reformate as rf
+from forVats.rebuild import rebuild
 
 def log_vat(message: str):
     print(f"[VATS] {message}")
@@ -79,6 +80,9 @@ def process(
     time.sleep(1)
     ct.main(output_dir)
 
+    log_vat("Rebuilding exit data")
+    rebuild(output_dir, df)
+    
     progress("Processing completed!")
     log_vat("VAT processing completed")
     return responses

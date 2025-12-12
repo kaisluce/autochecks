@@ -6,9 +6,11 @@ import threading
 import pandas as pd
 from dotenv import load_dotenv
 
-import partner_processing as pp
-from checks import generate_report
+import forSirenSiret.partner_processing as pp
+from forSirenSiret.checks import generate_report
 from forVats.process import process
+
+import mail_export as me
 
 
 load_dotenv()
@@ -54,7 +56,37 @@ def main():
         engine="python",
     )
     df["value"] = df["value"].astype(str)
-    df = df[df["type"].isin(["FR0", "FR1", "FR2"])].copy()
+    dffr = df[df["type"].isin(["FR0", "FR1", "FR2"])].copy()
+    dfeu = df[df["type"].isin([
+        "DE0",
+        "AT0",
+        "BE0",
+        "BG0",
+        "CY0",
+        "HR0",
+        "DK0",
+        "ES0",
+        "EE0",
+        "FI0",
+        "GR0",
+        "IE0",
+        "IT0",
+        "LV0",
+        "LT0",
+        "LU0",
+        "MT0",
+        "NL0",
+        "PL0",
+        "PT0",
+        "CZ0",
+        "RO0",
+        "SK0",
+        "SI0",
+        "SE0",
+        ])]
+    mask = dfeu["type"].str.endswith("0")
+    dfeu.loc[mask, "type"] = "FR0"
+    df = pd.concat([dffr, dfeu]).sort_values(by=["BP", "type"])
     df = (
         df.pivot_table(
             index="BP",
@@ -71,10 +103,15 @@ def main():
 
     merged, merged_path = pp.build_partner_dataset(df=df, infos_path=names_path, output_dir=output_dir)
     print(merged["VAT"].describe())
+    merged = merged.head(250)
     # Run SIREN/SIRET and VAT flows in parallel threads
+    siren_df = merged[
+        ~(merged["VAT"].isna() | merged["VAT"].astype(str).str.startswith("FR") | merged["VAT"] == "None")
+    ]
+
     siren_thread = threading.Thread(
         target=generate_report,
-        kwargs={"output": merged, "input_dir": output_dir, "output_dir": siren_directory},
+        kwargs={"output": siren_df, "input_dir": output_dir, "output_dir": siren_directory},
     )
     vat_thread = threading.Thread(
         target=process,
@@ -84,6 +121,9 @@ def main():
     vat_thread.start()
     siren_thread.join()
     vat_thread.join()
+    
+    me.main(output_dir)
+    
 
 
 if __name__ == "__main__":

@@ -3,8 +3,8 @@ import sys
 from typing import Optional
 import pandas as pd
 from openpyxl import load_workbook
-import requestsiren as rsn
-import requestsiret as rst
+import forSirenSiret.requestsiren as rsn
+import forSirenSiret.requestsiret as rst
 from thefuzz import fuzz
 
 

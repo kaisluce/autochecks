@@ -1,3 +1,6 @@
 dotenv
 pandas
 thefuzz
+msal
+requests
+cryptography

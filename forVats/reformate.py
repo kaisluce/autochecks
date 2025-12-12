@@ -34,6 +34,7 @@ def reformate(
     log_vat(f"Input rows: {len(df)}")
     df = df.copy()
     df.dropna(subset=[column], inplace=True)
+    df = df.drop_duplicates(subset=["VAT"])
     progress(f"Reformatting data into {((len(df)) // 100) + 1} files.")
     log_vat(f"Rows after VAT dropna: {len(df)}")
 
