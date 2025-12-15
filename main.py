@@ -134,7 +134,6 @@ def main():
         join_table_path=join_path,
         adress_table_path=adress_path
         )
-    merged = merged.head(20)
     # print(merged.describe())
     # Run SIREN/SIRET and VAT flows in parallel threads
     siren_df = merged[

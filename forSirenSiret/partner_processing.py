@@ -26,7 +26,6 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : s
     join_table = pd.read_csv(
         join_table_path,
         sep=";",
-        names=["BP", "adress_ID"],
         engine="python",
         quoting=csv.QUOTE_NONE,
         on_bad_lines="skip",
@@ -40,8 +39,8 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : s
     )
     
     # normalisation pour les comparaisons
-    join_table["BP"] = join_table["BP"].astype(str)
-    join_table["adress_ID"] = join_table["adress_ID"].astype(str)
+    join_table["Business Partner"] = join_table["Business Partner"].astype(str)
+    join_table["Addr. No."] = join_table["Addr. No."].astype(str)
     # Normaliser les types pour la jointure adresse.
     if not adress_table.empty:
         adress_table.iloc[:, 0] = adress_table.iloc[:, 0].astype(str)
@@ -115,7 +114,7 @@ def merge_address(datas: pd.DataFrame, join_table: pd.DataFrame, adress_table: p
         if pd.isna(value):
             return False
         s = str(value).strip()
-        return s and s.lower() not in {"nan", "none", "null", ".", "x", "na", "n/a", "naan"}
+        return s and s.lower() not in {"nan", "none", "null", ".", "x", "na", "n/a", "naan", "xx", "xxx"} and len(s) >= 3
 
     def _is_valid_postcode(value) -> bool:
         if not _is_valid(value):
@@ -131,7 +130,8 @@ def merge_address(datas: pd.DataFrame, join_table: pd.DataFrame, adress_table: p
     def _fill_row(row: pd.Series) -> pd.Series:
         print(f"[DEBUG] Processing BP={row.get('partner', '')}")
         bp_val = str(row.get("partner", ""))
-        matches = join_table[join_table["BP"] == bp_val]
+        matches = join_table[join_table["Business Partner"] == bp_val]
+        print(f"[DEBUG]   Matches for BP={bp_val}: {len(matches)}")
 
         # valeurs par défaut
         row["adressID"] = ""
@@ -151,7 +151,7 @@ def merge_address(datas: pd.DataFrame, join_table: pd.DataFrame, adress_table: p
             print(f"[DEBUG]   No matches in join_table or addr_key missing for BP={bp_val}")
             return row
 
-        adress_id = matches["adress_ID"].max()
+        adress_id = matches["Addr. No."].max()
         row["adressID"] = adress_id
         row["has_addressID"] = _is_valid(adress_id)
         if not row["has_addressID"]:
