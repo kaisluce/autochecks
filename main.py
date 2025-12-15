@@ -20,6 +20,8 @@ def create_paths():
     input_location = os.getenv("INPUTS")
     input_file = os.getenv("INPUT_FILE")
     names_file = os.getenv("NAMES_FILE")
+    join_tabme = os.getenv("JOIN_TABLE")
+    adress_table = os.getenv("ADRESS_TABLE")
     today = datetime.now().strftime("%Y-%m-%d_%H-%M_REPORT")
     output_dir = directory / today
     siren_directory = output_dir / "siren_siret"
@@ -29,7 +31,17 @@ def create_paths():
     VAT_directory.mkdir(parents=True, exist_ok=True)
     input_path = os.path.join(input_location, input_file)
     names_path = os.path.join(input_location, names_file)
-    return input_path, names_path, output_dir, siren_directory, VAT_directory
+    join_path = os.path.join(input_location, join_tabme)
+    adress_path = os.path.join(input_location, adress_table)
+    return (
+        input_path,
+        names_path,
+        output_dir,
+        siren_directory,
+        VAT_directory,
+        join_path,
+        adress_path
+        )
 
 
 def detect_skiprows(file_path: Path) -> int:
@@ -43,7 +55,15 @@ def detect_skiprows(file_path: Path) -> int:
 
 
 def main():
-    input_path, names_path, output_dir, siren_directory, VAT_directory= create_paths()
+    (
+        input_path,
+        names_path,
+        output_dir,
+        siren_directory,
+        VAT_directory,
+        join_path,
+        adress_path
+        )= create_paths()
     skip = detect_skiprows(
         # r"\\interfacessap.file.core.windows.net\interfacess4p\data_mdm_export\BP_TAXNUM.csv"
         input_path
@@ -107,9 +127,15 @@ def main():
     if "VAT" not in df.columns:
         df["VAT"] = ""
 
-    merged, merged_path = pp.build_partner_dataset(df=df, infos_path=names_path, output_dir=output_dir)
+    merged, merged_path = pp.build_partner_dataset(
+        df=df,
+        infos_path=names_path,
+        output_dir=output_dir,
+        join_table_path=join_path,
+        adress_table_path=adress_path
+        )
     merged = merged.head(20)
-    print(merged.describe())
+    # print(merged.describe())
     # Run SIREN/SIRET and VAT flows in parallel threads
     siren_df = merged[
         ~(merged["VAT"].isna() | merged["VAT"].astype(str).str.startswith("FR") | merged["VAT"] == "None")

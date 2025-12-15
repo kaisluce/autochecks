@@ -52,3 +52,4 @@ def merge_df(datas : pd.DataFrame, infos_part : pd.DataFrame):
     merged = merged.astype(str)
 
     return merged
+

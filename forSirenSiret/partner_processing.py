@@ -1,11 +1,12 @@
 import os
 import sys
+import csv
 import pandas as pd
 import forSirenSiret.treatpartner as tp
 import forSirenSiret.merge_tables as mt
 
 
-def build_partner_dataset(df: pd.DataFrame, infos_path: str, output_dir: str, update_status=None):
+def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : str, adress_table_path : str, output_dir: str, update_status=None):
     """
     Construit un jeu de données consolidé pour les partenaires en traitant un DataFrame d'entrée,
     puis en le fusionnant avec des informations supplémentaires.
@@ -21,7 +22,29 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, output_dir: str, up
 
     output = pd.DataFrame().astype(str)
     output.to_excel(output_path, index=False)
-
+    
+    join_table = pd.read_csv(
+        join_table_path,
+        sep=";",
+        names=["BP", "adress_ID"],
+        engine="python",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="skip",
+    ).astype(str)
+    adress_table = pd.read_csv(
+        adress_table_path,
+        sep=";",
+        engine="python",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="skip",
+    )
+    
+    # normalisation pour les comparaisons
+    join_table["BP"] = join_table["BP"].astype(str)
+    join_table["adress_ID"] = join_table["adress_ID"].astype(str)
+    # Normaliser les types pour la jointure adresse.
+    if not adress_table.empty:
+        adress_table.iloc[:, 0] = adress_table.iloc[:, 0].astype(str)
     done = []
     n_df = len(df)
 
@@ -38,6 +61,7 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, output_dir: str, up
             if partner not in done:
                 part_data = tp.main(partner, df)
                 newline = pd.DataFrame([part_data]).astype(str)
+                newline = merge_address(newline, join_table, adress_table)
                 output = pd.concat([output, newline], ignore_index=True)
 
                 output.tail(1).to_excel(
@@ -77,3 +101,94 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, output_dir: str, up
     log(f"[INFO] Final partner dataset saved: {output_path} ({len(output)} rows)")
 
     return output, output_path
+
+# Redéfinition de merge_address pour traiter tout un DataFrame et corriger l'application au niveau des lignes.
+def merge_address(datas: pd.DataFrame, join_table: pd.DataFrame, adress_table: pd.DataFrame):
+    """
+    Complète les champs d'adresse pour chaque ligne du DataFrame.
+    Sélectionne le plus grand `adress_ID` pour un BP donné et renseigne les flags `has_*`
+    en excluant les valeurs vides ou placeholders.
+    """
+    
+    print(f"[DEBUG] Processing BP={datas.iloc[0].get('partner', '')}")
+    def _is_valid(value) -> bool:
+        if pd.isna(value):
+            return False
+        s = str(value).strip()
+        return s and s.lower() not in {"nan", "none", "null", ".", "x", "na", "n/a", "naan"}
+
+    def _is_valid_postcode(value) -> bool:
+        if not _is_valid(value):
+            return False
+        s = str(value).strip()
+        return s not in {"0000", "00000", "9999", "99999"}
+
+
+    addr_key = adress_table.columns[0] if not adress_table.empty else None
+    if addr_key is not None:
+        adress_table[addr_key] = adress_table[addr_key].astype(str)
+
+    def _fill_row(row: pd.Series) -> pd.Series:
+        print(f"[DEBUG] Processing BP={row.get('partner', '')}")
+        bp_val = str(row.get("partner", ""))
+        matches = join_table[join_table["BP"] == bp_val]
+
+        # valeurs par défaut
+        row["adressID"] = ""
+        row["street"] = ""
+        row["street4"] = ""
+        row["street5"] = ""
+        row["city"] = ""
+        row["postcode"] = ""
+        row["has_addressID"] = False
+        row["has_street"] = False
+        row["has_street4"] = False
+        row["has_street5"] = False
+        row["has_city"] = False
+        row["has_postcode"] = False
+
+        if matches.empty or addr_key is None:
+            print(f"[DEBUG]   No matches in join_table or addr_key missing for BP={bp_val}")
+            return row
+
+        adress_id = matches["adress_ID"].max()
+        row["adressID"] = adress_id
+        row["has_addressID"] = _is_valid(adress_id)
+        if not row["has_addressID"]:
+            print(f"[DEBUG]   Invalid adress_ID={adress_id} for BP={bp_val}")
+            return row
+
+        address_match = adress_table[adress_table[addr_key] == str(adress_id)]
+        if address_match.empty:
+            print(f"[DEBUG]   No address row for adress_ID={adress_id} (BP={bp_val})")
+            return row
+
+        adress = address_match.iloc[0]
+
+        def _get_pos(idx: int):
+            return adress.iloc[idx] if len(adress) > idx else None
+
+        # Index mapping: AA=26, AD=29, U=20, F=5, E=4 (0-based).
+        street = _get_pos(26)
+        street4 = _get_pos(29)
+        street5 = _get_pos(20)
+        city = _get_pos(5)
+        postcode = _get_pos(4)
+
+        print(f"[DEBUG]   Fields for BP={bp_val} / adress_ID={adress_id}: street={street} street4={street4} street5={street5} city={city} postcode={postcode}")
+
+        row["street"] = street
+        row["street4"] = street4
+        row["street5"] = street5
+        row["city"] = city
+        row["postcode"] = postcode
+
+        row["has_street"] = _is_valid(street)
+        row["has_street4"] = _is_valid(street4)
+        row["has_street5"] = _is_valid(street5)
+        row["has_city"] = _is_valid(city)
+        row["has_postcode"] = _is_valid_postcode(postcode)
+
+        return row
+
+    return datas.apply(_fill_row, axis=1)

@@ -45,7 +45,6 @@ def main(token, output_path):
 
     # write the binary content to the specified output path
     with open(output_path, "wb") as f:
-        print(resp)
         f.write(resp.content)
 
     # return the output path for confirmation
