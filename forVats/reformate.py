@@ -34,6 +34,7 @@ def reformate(
     log_vat(f"Input rows: {len(df)}")
     df = df.copy()
     df.dropna(subset=[column], inplace=True)
+    df = df[df[column] != "None"]
     df = df.drop_duplicates(subset=["VAT"])
     progress(f"Reformatting data into {((len(df)) // 100) + 1} files.")
     log_vat(f"Rows after VAT dropna: {len(df)}")
@@ -66,6 +67,18 @@ def reformate(
                 new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
             num += 1
     if not new_df.empty:
+        new_line = pd.DataFrame(
+            [
+                {
+                    "MS Code": "XX",
+                    "VAT Number": "XXXXXXXXXXXXXX",
+                    "Requester MS Code": rq_c_code,
+                    "Requester VAT Number": rq_vat_number,
+                }
+            ]
+        )
+        while new_df.shape[0] <= 3:
+            new_df = pd.concat([new_df, new_line])
         output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // 100:03d}.csv")
         log_vat(f"Saving {output_file} with {len(new_df)} entries")
         new_df.to_csv(output_file, index=False)

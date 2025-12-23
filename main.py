@@ -10,7 +10,7 @@ import forSirenSiret.partner_processing as pp
 from forSirenSiret.checks import generate_report
 from forVats.process import process
 
-import mail_export as me
+import emailing.mail_export as me
 
 
 load_dotenv()
@@ -121,7 +121,7 @@ def main():
             aggfunc="first",
         )
         .reset_index()
-        .rename(columns={"FR0" : "VAT", "FR1": "siret", "FR2": "siren"})
+        .rename(columns={"FR0" : "VAT", "FR1": "siret", "FR2": "siren"}).astype(str)
     )
     # Ensure the VAT column exists even if FR0 was missing from the source file
     if "VAT" not in df.columns:

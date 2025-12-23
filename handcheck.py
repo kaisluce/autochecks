@@ -14,17 +14,28 @@ import forSirenSiret.partner_processing as pp
 from forSirenSiret.checks import generate_report
 from forVats.process import process
 
-import mail_export as me
+import emailing.mail_export as me
 
 
 load_dotenv()
 
+
+def _normalize_bp_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """Rename the first three columns to BP/type/value and enforce their presence."""
+    if df_raw.shape[1] < 3:
+        raise ValueError("Le fichier doit contenir au moins trois colonnes (BP, type, value).")
+    col0, col1, col2 = df_raw.columns[:3]
+    normalized = df_raw.rename(columns={col0: "BP", col1: "type", col2: "value"})
+    return normalized[["BP", "value", "type"]].astype(str)
+
+
 def create_paths():
     directory = Path(os.getenv("DIRECTORY_LOCATION", "")).expanduser()
+    BUT_dir = r"\\interfacessap.file.core.windows.net\interfacess4p\data_mdm_export"
     input_location = os.getenv("INPUTS")
     input_file = os.getenv("INPUT_FILE")
     names_file = os.getenv("NAMES_FILE")
-    join_tabme = os.getenv("JOIN_TABLE")
+    join_table = os.getenv("JOIN_TABLE")
     adress_table = os.getenv("ADRESS_TABLE")
     today = datetime.now().strftime("%Y-%m-%d_%H-%M_HANDCHECK_REPORT")
     output_dir = directory / today
@@ -34,9 +45,9 @@ def create_paths():
     siren_directory.mkdir(parents=True, exist_ok=True)
     VAT_directory.mkdir(parents=True, exist_ok=True)
     input_path = os.path.join(input_location, input_file)
-    names_path = os.path.join(input_location, names_file)
-    join_path = os.path.join(input_location, join_tabme)
-    adress_path = os.path.join(input_location, adress_table)
+    names_path = os.path.join(BUT_dir, names_file)
+    join_path = os.path.join(BUT_dir, join_table)
+    adress_path = os.path.join(BUT_dir, adress_table)
     return (
         input_path,
         names_path,
@@ -58,13 +69,73 @@ def detect_skiprows(file_path: Path) -> int:
     return 1 if "UNKNOWN" in first.upper() else 0
 
 
+def load_bp_csv(file_path: str, skip: int, logger: "TkLogViewer") -> pd.DataFrame:
+    """
+    Read the BP export while handling multiple delimiter/header shapes.
+
+    The classic case is a semicolon-separated file without headers. Some SAP
+    exports, however, come with a header row and use commas (or mixed quoting),
+    which pandas treats as a single column if we force ``sep=';'``. This helper
+    tries the legacy format first, then falls back to an auto-detected delimiter
+    with a header row using the French column titles. Excel files (`.xlsx`/`.xls`)
+    are also accepted by reusing the first three columns.
+    """
+    base_kwargs = {
+        "dtype": str,
+        "skiprows": skip,
+        "on_bad_lines": "skip",
+        "engine": "python",
+    }
+
+    # Excel fallback: accept `.xlsx`/`.xls` inputs with a header row.
+    if Path(file_path).suffix.lower() in {".xlsx", ".xls"}:
+        try:
+            df_raw = pd.read_excel(file_path, dtype=str, engine="openpyxl")
+            return _normalize_bp_dataframe(df_raw)
+        except Exception as exc:
+            logger.update_status(f"Lecture Excel impossible ({exc}); tentative en mode CSV...")
+
+    # Legacy format: semicolon-separated, no header, fixed positions.
+    try:
+        df = pd.read_csv(
+            file_path,
+            sep=";",
+            header=None,
+            usecols=[0, 1, 3],
+            names=["BP", "value", "type"],
+            **base_kwargs,
+        )
+        if {"BP", "value", "type"}.issubset(df.columns):
+            return df
+    except Exception as exc:
+        logger.update_status(f"Fallback to auto-detected CSV (legacy read failed: {exc})")
+
+    # Fallback: auto-detect delimiter with header row (e.g., 'Partenaire', 'Cat. N° ID fiscale', ...).
+    try:
+        df_raw = pd.read_csv(file_path, sep=None, header=0, **base_kwargs)
+        # Prioritize position over header names: first 3 columns become BP/type/value
+        return _normalize_bp_dataframe(df_raw)
+    except Exception as exc:
+        logger.update_status(f"Auto-detection failed ({exc}); trying explicit separators...")
+
+    # Last-chance attempts: explicit separators with header row, renaming by index.
+    for sep in (";", ","):
+        try:
+            df_raw = pd.read_csv(file_path, sep=sep, header=0, **base_kwargs)
+            return _normalize_bp_dataframe(df_raw)
+        except Exception:
+            continue
+
+    raise RuntimeError("Impossible de lire le fichier d'entree: aucun format de delimiter n'a fonctionné.")
+
+
 class TkLogViewer:
     """Small log panel that captures stdout/stderr and displays them in Tk."""
 
     def __init__(self, root: tk.Tk):
         self.root = root
         self.queue: queue.Queue = queue.Queue()
-        self.status = tk.StringVar(value="Waiting for a SAP BP CSV file.")
+        self.status = tk.StringVar(value="Waiting for a SAP BP CSV or Excel file.")
         self._stdout = sys.stdout
         self._stderr = sys.stderr
 
@@ -125,17 +196,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
 
         logger.update_status(f"Selected file: {target_input}")
         skip = detect_skiprows(target_input)
-        df = pd.read_csv(
-            target_input,
-            sep=";",
-            header=None,
-            skiprows=skip,
-            dtype=str,
-            usecols=[0, 1, 3],
-            names=["BP", "value", "type"],
-            on_bad_lines="skip",
-            engine="python",
-        )
+        df = load_bp_csv(target_input, skip, logger)
         df["value"] = df["value"].astype(str)
         dffr = df[df["type"].isin(["FR0", "FR1", "FR2"])].copy()
         dfeu = df[df["type"].isin([
@@ -178,6 +239,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
             )
             .reset_index()
             .rename(columns={"FR0": "VAT", "FR1": "siret", "FR2": "siren"})
+            .astype(str)
         )
         if "VAT" not in df.columns:
             df["VAT"] = ""
@@ -191,7 +253,6 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
             adress_table_path=adress_path,
             update_status=logger.update_status,
         )
-        merged = merged.head(20)
 
         siren_df = merged[
             ~(merged["VAT"].isna() | merged["VAT"].astype(str).str.startswith("FR") | merged["VAT"] == "None")
@@ -238,8 +299,12 @@ if __name__ == "__main__":
     def select_and_run():
         input_location = os.getenv("INPUTS", "")
         selected = filedialog.askopenfilename(
-            title="Select an entry file to process (SAP BP export)",
-            filetypes=[("CSV Files", "*.csv")],
+            title="Select an entry file to process (SAP BP export, CSV or Excel)",
+            filetypes=[
+                ("CSV or Excel Files", "*.csv *.xlsx *.xls"),
+                ("CSV Files", "*.csv"),
+                ("Excel Files", "*.xlsx *.xls"),
+            ],
             defaultextension=".csv",
             initialdir=input_location or None,
             parent=root,
@@ -251,7 +316,7 @@ if __name__ == "__main__":
 
     tk.Button(
         root,
-        text="Pick SAP BP CSV and run",
+        text="Pick SAP BP file and run",
         command=select_and_run,
     ).pack(fill="x", padx=10, pady=(5, 0))
 

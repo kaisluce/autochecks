@@ -25,7 +25,7 @@ def rebuild(path: str, infos: pd.DataFrame):
     La clé est `MS Code` + `VAT Number` (normalisés).
     """
     report_path = os.path.join(path, "report_concatenated.xlsx")
-    df = pd.read_excel(report_path)
+    df = pd.read_excel(report_path, dtype=str)
 
     # Prépare une table VAT -> liste de BP depuis les infos d'origine
     infos = infos.copy()

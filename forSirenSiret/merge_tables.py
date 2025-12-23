@@ -35,19 +35,28 @@ def merge_df(datas : pd.DataFrame, infos_part : pd.DataFrame):
     """
     # Filtrer pour ne conserver que les groupes pertinents (ZG0-ZG13, sauf ZG11) et les partenaires français.
     grouping_num = pd.to_numeric(infos_part['Grp.'].str[2:], errors='coerce')
-    infos_part = infos_part[infos_part['Grp.'].str.startswith('ZG') & (grouping_num >= 0) & (grouping_num <= 13) & (grouping_num != 11)]
+    infos_part = infos_part[infos_part['Grp.'].str.startswith('ZG') & (grouping_num >= 1) & (grouping_num <= 13) & (grouping_num != 11)]
 
     #infos_part = infos_part[infos_part["Country/Region Key"] == "FR"]
 
     # Renommer la colonne pour correspondre à la clé de fusion et effectuer la fusion.
-    infos_part = infos_part.rename(columns={'Business Partner': 'BP'})
+    infos_part = infos_part.rename(columns={infos_part.columns[0]: "BP"})
     merged = pd.merge(datas, infos_part, on='BP', how='outer')
 
 
     # Appliquer les fonctions de concaténation et supprimer les colonnes d'origine.
     infos_part['Name 1'] = infos_part.apply(concat_names, axis=1)
     merged = merged.drop(columns=['Name 2', 'Name 3', 'Name 4'])
-    merged = merged.dropna(subset=['siren', 'siret'], how='all')
+    merged = merged.replace("None", None)
+    merged = merged.replace("", None)
+    merged = merged.replace("nan", None)
+    merged = merged.replace("Nan", None)
+    merged = merged.replace("NaN", None)
+    merged = merged.replace("NAN", None)
+    merged = merged.replace("N/A", None)
+    merged = merged.dropna(subset=["siren", "siret", "VAT"], how="all")
+
+    
     merged = merged[~merged["Name 1"].str.startswith("#", na=False)]
     merged = merged.astype(str)
 

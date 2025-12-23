@@ -35,6 +35,7 @@ REPORT_COLUMNS = [
     "commune",
     "duplicates_siren",
     "duplicates_siret",
+    "duplicates_VAT",
     "missing siren",
     "missing siret",
     "Missing_Vat",
@@ -54,6 +55,15 @@ REPORT_COLUMNS = [
 # Un score supérieur à ce seuil est considéré comme une "légère différence".
 NAME_SLIGHT_THRESHOLD = 75
 STREET_SLIGHT_THRESHOLD = 75
+
+ID_COLUMNS = ("BP", "Business Partner", "siren", "siret")
+
+def _coerce_id_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure identifier columns remain strings when reading external files."""
+    for col in ID_COLUMNS:
+        if col in df.columns:
+            df[col] = df[col].astype(str)
+    return df
 
 def compare_names(row):
     """
@@ -113,16 +123,17 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
         range_ref = f"A2:AJ{MAX_FORMAT_ROWS}"
 
         # Flags (colonnes W -> AD) doivent tous être FALSE pour considérer la ligne "clean".
+        # Flags columns X -> AE must all be FALSE to consider the line clean.
         flags_all_false = (
             "AND("
-            '$W2="False",'
             '$X2="False",'
             '$Y2="False",'
             '$Z2="False",'
             '$AA2="False",'
             '$AB2="False",'
             '$AC2="False",'
-            '$AD2="False")'
+            '$AD2="False",'
+            '$AE2="False")'
         )
         flags_any_true = f"NOT({flags_all_false})"
 
@@ -135,7 +146,7 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
                     '=AND('
                     'OR($F2="Actif",$F2="Active"),'
                     f'{flags_all_false},'
-                    'OR($U2<>"[]",$V2<>"[]")'
+                    'OR($U2<>"[]",$V2<>"[]",$W2<>"[]")'
                     ')'
                 ),
                 "format": yellow,
@@ -153,7 +164,8 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
                     'OR($F2="Actif",$F2="Active"),'
                     f'{flags_any_true},'
                     '$U2="[]",'
-                    '$V2="[]"'
+                    '$V2="[]",'
+                    '$W2="[]"'
                     ')'
                 ),
                 "format": orange,
@@ -193,7 +205,7 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
             {
                 "type": "formula",
                 "criteria": (
-                    f'=AND(OR($F2="Actif",$F2="Active"), {flags_all_false}, $U2="[]", $V2="[]")'
+                    f'=AND(OR($F2="Actif",$F2="Active"), {flags_all_false}, $U2="[]", $V2="[]", $W2="[]")'
                 ),
                 "format": green,
             },
@@ -223,7 +235,8 @@ def _ensure_template_v2(report_file: str):
 
     needs_rebuild = "Report" not in wb.sheetnames
     try:
-        existing = pd.read_excel(report_file, sheet_name="Report")
+        existing = pd.read_excel(report_file, sheet_name="Report", dtype=str)
+        existing = _coerce_id_columns(existing)
     except Exception:
         existing = pd.DataFrame()
         needs_rebuild = True
@@ -262,12 +275,14 @@ def resume_checks(processed_path: str, report_path: str, update_status=None):
     log(f"[INFO] Resume requested. Data={processed_path} Report={report_path}")
 
     try:
-        df = pd.read_excel(processed_path).astype(str)
+        df = pd.read_excel(processed_path, dtype=str).astype(str)
+        df = _coerce_id_columns(df)
     except Exception as exc:
         raise RuntimeError(f"Impossible de lire le fichier data: {exc}")
 
     try:
-        existing = pd.read_excel(report_path, sheet_name="Report").astype(str)
+        existing = pd.read_excel(report_path, sheet_name="Report", dtype=str).astype(str)
+        existing = _coerce_id_columns(existing)
     except Exception:
         existing = pd.DataFrame(columns=REPORT_COLUMNS)
 
@@ -311,6 +326,9 @@ def write_line(writer, report_df, line_df, save_path=None, sheet_name="Report"):
     Returns:
         pd.DataFrame: Le DataFrame de rapport mis à jour.
     """
+    # Accept both DataFrame and Series inputs; normalize to a one-row DataFrame.
+    if isinstance(line_df, pd.Series):
+        line_df = line_df.to_frame().T
     line_df = reports_col(line_df.astype(str))
     ordered = line_df.reindex(columns=REPORT_COLUMNS)
     report_df = pd.concat([report_df, ordered], ignore_index=True)
@@ -573,7 +591,7 @@ def generate_report(
 
             # Case 3: SIRET present and starts with SIREN -> check SIRET only
             # Si le SIRET est présent et semble valide (commence par le SIREN), on ne vérifie que le SIRET.
-            else:
+            elif siret[:9] == siren and not (siret in ("", "None") or "Invalid input" in siret):
                 siret_line = _siret_only(row, BP, siret)
                 report = write_line(writer, report, siret_line, report_file)
                 siret_status = _get_status(siret_line)
@@ -584,5 +602,9 @@ def generate_report(
                     siren_line = _siren_only(row, BP, siren)
                     report = write_line(writer, report, siren_line, report_file)
                     log(f"[WARN]   -> Added SIREN check after SIRET inactive status={_get_status(siren_line)}")
+            else:
+                line = row
+                report = write_line(writer, report, line, report_file)
+                log(f"[SIREN-SIRET]   -> No data for this BP")
 
     return report_file

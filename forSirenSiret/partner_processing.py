@@ -5,6 +5,38 @@ import pandas as pd
 import forSirenSiret.treatpartner as tp
 import forSirenSiret.merge_tables as mt
 
+ID_COLUMNS = ("BP", "partner", "Business Partner", "siren", "siret")
+BP_COLUMNS = {"BP", "partner", "Business Partner"}
+
+
+def _normalize_bp_value(value: str) -> str:
+    """
+    Normalize BP identifiers by trimming spaces/quotes and left-padding to 10 digits
+    when the value is numeric.
+    """
+    if pd.isna(value):
+        return ""
+    s = str(value).strip().strip('"').strip("'")
+    # Remove a trailing .0 introduced by Excel-like casts
+    if s.endswith(".0"):
+        s = s[:-2]
+    # Keep only digits for padding; if no digits remain, fall back to the trimmed string.
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if digits:
+        return digits.zfill(10)
+    return s
+
+def _coerce_id_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    """Force identifier columns to string to avoid scientific notation and truncation."""
+    for col in ID_COLUMNS:
+        if col in frame.columns:
+            if col in BP_COLUMNS:
+                frame[col] = frame[col].apply(_normalize_bp_value)
+            else:
+                # Normalize identifiers to string and trim surrounding spaces/quotes to avoid join mismatches.
+                frame[col] = frame[col].astype(str).str.strip().str.strip('"').str.strip()
+    return frame
+
 
 def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : str, adress_table_path : str, output_dir: str, update_status=None):
     """
@@ -22,6 +54,20 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : s
 
     output = pd.DataFrame().astype(str)
     output.to_excel(output_path, index=False)
+
+    # Lecture du fichier infos (CSV séparé par ;), en ignorant les lignes malformées.
+    infos = pd.read_csv(
+        infos_path,
+        sep=";",
+        dtype=str,
+        on_bad_lines="skip",
+        engine="python",
+    ).astype(str)
+    infos = _coerce_id_columns(infos)
+    
+    
+    df = _coerce_id_columns(df)
+    df = mt.merge_df(df, infos)
     
     join_table = pd.read_csv(
         join_table_path,
@@ -29,14 +75,19 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : s
         engine="python",
         quoting=csv.QUOTE_NONE,
         on_bad_lines="skip",
+        dtype=str,
     ).astype(str)
+    join_table = _coerce_id_columns(join_table)
     adress_table = pd.read_csv(
         adress_table_path,
         sep=";",
         engine="python",
         quoting=csv.QUOTE_NONE,
         on_bad_lines="skip",
+        dtype=str,
     )
+    adress_table = _coerce_id_columns(adress_table)
+    
     
     # normalisation pour les comparaisons
     join_table["Business Partner"] = join_table["Business Partner"].astype(str)
@@ -58,8 +109,11 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : s
             log(f"[INFO] Processing partner {i+1}/{n_df}: {partner}")
 
             if partner not in done:
+                # Conserver les colonnes du merge (nom, pays...) et y ajouter les infos SIREN/SIRET calculées
                 part_data = tp.main(partner, df)
-                newline = pd.DataFrame([part_data]).astype(str)
+                merged_row = row.to_dict()
+                merged_row.update(part_data)
+                newline = pd.DataFrame([merged_row]).astype(str)
                 newline = merge_address(newline, join_table, adress_table)
                 output = pd.concat([output, newline], ignore_index=True)
 
@@ -73,18 +127,6 @@ def build_partner_dataset(df: pd.DataFrame, infos_path: str, join_table_path : s
 
             done.append(partner)
 
-    # Lecture du fichier infos (CSV séparé par ;), en ignorant les lignes malformées.
-    infos = pd.read_csv(
-        infos_path,
-        sep=";",
-        dtype=str,
-        on_bad_lines="skip",
-        engine="python",
-    ).astype(str)
-
-    # Harmoniser la clé de jointure tout en conservant 'partner' pour le report.
-    output["BP"] = output.get("partner", output.get("BP"))
-    output = mt.merge_df(output, infos)
     
     # Filtre optionnel : exclure les lignes dont le nom contient "snetor".
     name_col = "Name 1" if "Name 1" in output.columns else "Name1"
@@ -174,6 +216,7 @@ def merge_address(datas: pd.DataFrame, join_table: pd.DataFrame, adress_table: p
         street5 = _get_pos(20)
         city = _get_pos(5)
         postcode = _get_pos(4)
+        country = _get_pos(11)
 
         print(f"[DEBUG]   Fields for BP={bp_val} / adress_ID={adress_id}: street={street} street4={street4} street5={street5} city={city} postcode={postcode}")
 
@@ -182,6 +225,7 @@ def merge_address(datas: pd.DataFrame, join_table: pd.DataFrame, adress_table: p
         row["street5"] = street5
         row["city"] = city
         row["postcode"] = postcode
+        row["country"] = country
 
         row["has_street"] = _is_valid(street)
         row["has_street4"] = _is_valid(street4)

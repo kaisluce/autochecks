@@ -29,7 +29,7 @@ def main(work_dir: str):
         file_path = reports_dir / file_name
         log_vat(f"Reading {file_name}")
 
-        df = pd.read_excel(file_path)
+        df = pd.read_excel(file_path, dtype=str)
         df["__source_file__"] = file_name
         all_dfs.append(df)
 

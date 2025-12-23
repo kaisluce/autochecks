@@ -39,17 +39,19 @@ def main(partner, df: pd.DataFrame):
 
     doubles_siret = df.loc[(df["siret"] == siret) & (df["BP"] != partner), "BP"].tolist()
     doubles_siren = df.loc[(df["siren"] == siren) & (df["BP"] != partner), "BP"].tolist()
+    doubles_VAT = df.loc[(df["VAT"] == vat) & (df["BP"] != partner), "BP"].tolist()
 
     out = {
-        "partner": partner,
+        # "partner": partner,
         "siren": siren,
         "siret": siret,
         "VAT": vat,
         "duplicates_siren": doubles_siren,
         "duplicates_siret": doubles_siret,
+        "duplicates_VAT": doubles_VAT,
         "missing siren": False,
         "missing siret": False,
-        "Missing_Vat": False,
+        "missing vat": False,
         "Missmatching siren siret" : False,
         "Missmatching siren VAT" : False,
         "uses a snetor siren": False,
@@ -62,7 +64,7 @@ def main(partner, df: pd.DataFrame):
     if siret is None:
         out["missing siret"] = True
     if vat is None:
-        out["Missing_Vat"] = True
+        out["Missing vat"] = True
 
     if siret and siren and siret[:9] != siren:
         out["Missmatching siren siret"] = True
