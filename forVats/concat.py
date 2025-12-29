@@ -7,16 +7,37 @@ import openpyxl
 import pandas as pd
 
 
-def log_vat(message: str):
-    print(f"[VATS] {message}")
+def _log_helpers(logger=None):
+    def _info(msg):
+        if logger is None:
+            print(f"[VATS] {msg}")
+        elif hasattr(logger, "log"):
+            logger.log(msg)
+        elif hasattr(logger, "info"):
+            logger.info(msg)
+        else:
+            logger(msg)
+
+    def _warn(msg):
+        if logger is None:
+            print(f"[VATS][WARN] {msg}")
+        elif hasattr(logger, "warn"):
+            logger.warn(msg)
+        elif hasattr(logger, "warning"):
+            logger.warning(msg)
+        else:
+            _info(f"[WARN] {msg}")
+    return _info, _warn
 
 
-def main(work_dir: str):
+def main(work_dir: str, logger=None):
     """
     Merge all Excel reports in the ``reports`` directory into a single Excel file.
 
     :param work_dir: Base directory containing the ``reports`` folder.
     """
+    _info, _warn = _log_helpers(logger)
+
     reports_dir = Path(work_dir) / "reports"
     output_file = Path(work_dir) / "report_concatenated.xlsx"
 
@@ -27,16 +48,16 @@ def main(work_dir: str):
             continue
 
         file_path = reports_dir / file_name
-        log_vat(f"Reading {file_name}")
+        _info(f"Reading {file_name}")
 
         df = pd.read_excel(file_path, dtype=str)
         df["__source_file__"] = file_name
         all_dfs.append(df)
 
     if not all_dfs:
-        log_vat("Aucun fichier excel a concatener.")
+        _warn("Aucun fichier excel a concatener.")
         return
 
     merged = pd.concat(all_dfs, ignore_index=True)
     merged.to_excel(output_file, index=False)
-    log_vat(f"Fichier final cree : {output_file}")
+    _info(f"Fichier final cree : {output_file}")

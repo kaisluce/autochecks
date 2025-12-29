@@ -6,23 +6,45 @@ import forVats.forceHTTP as fh
 import forVats.get_status as gs
 import time
 
-def log_vat(message: str):
-    print(f"[VATS] {message}")
 
-def submit_batch_file(batch_file):
+def _log_helpers(logger=None):
+    def _info(msg):
+        if logger is None:
+            print(f"[VATS] {msg}")
+        elif hasattr(logger, "log"):
+            logger.log(msg)
+        elif hasattr(logger, "info"):
+            logger.info(msg)
+        else:
+            logger(msg)
+
+    def _warn(msg):
+        if logger is None:
+            print(f"[VATS][WARN] {msg}")
+        elif hasattr(logger, "warn"):
+            logger.warn(msg)
+        elif hasattr(logger, "warning"):
+            logger.warning(msg)
+        else:
+            _info(f"[WARN] {msg}")
+    return _info, _warn
+
+
+def submit_batch_file(batch_file, logger=None):
     """
     Function that submits a single batch file and handles rejections by retrying.
     
     :param batch_file: File path of the batch file to submit
     """
+    _info, _warn = _log_helpers(logger)
     # main loop to handle rejections
     while True:
-        log_vat(f"Submitting batch file {batch_file}")
+        _info(f"Submitting batch file {batch_file}")
         # sends the batch file
         upl = fh.upload_batch(batch_file)
         # checks for HTTP errors
         if upl.status_code != 200:
-            log_vat(f"HTTP error during upload: {upl.status_code}")
+            _warn(f"HTTP error during upload: {upl.status_code}")
             return {
                 "status": "error",
                 "message": f"HTTP error {upl.status_code}",
@@ -34,7 +56,7 @@ def submit_batch_file(batch_file):
 
         # handles missing token
         if not token:
-            log_vat("No token received from upload response")
+            _warn("No token received from upload response")
             return {
                 "status": "error",
                 "message": "No token received",
@@ -46,7 +68,7 @@ def submit_batch_file(batch_file):
 
         # handles HTTP errors when checking status
         if status_resp.status_code != 200:
-            log_vat(f"HTTP error during status check: {status_resp.status_code}")
+            _warn(f"HTTP error during status check: {status_resp.status_code}")
             return {
                 "status": "error",
                 "message": f"HTTP error {status_resp.status_code}",
@@ -55,10 +77,10 @@ def submit_batch_file(batch_file):
         
         # checks if the batch was rejected
         status = status_resp.json().get("status")
-        log_vat(f"Recieved token : {status}")
+        _info(f"Recieved token : {status}")
         if status.upper() == "PROCESSING":
             # if not rejected, return the status
-            log_vat(f"Batch {batch_file} accepted, token {token}")
+            _info(f"Batch {batch_file} accepted, token {token}")
             return {
                 "status": "PROCESSING",
                 "data": status_resp.json()

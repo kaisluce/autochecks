@@ -1,6 +1,7 @@
 import os
 import sys
 import queue
+import traceback
 from datetime import datetime
 from pathlib import Path
 import threading
@@ -16,8 +17,43 @@ from forVats.process import process
 
 import emailing.mail_export as me
 
+# Base directory and default fallbacks; normally .env overrides these.
+BASE_DIR = Path(__file__).resolve().parent
+DIRECTORY_LOCATION=r"Z:\MDM\998_CHecks"
+INPUTS = "\\\\interfacessap.file.core.windows.net\\interfacess4p\\data_mdm_export"
+INPUT_FILE="BP_TAXNUM.csv"
+NAMES_FILE="BP_BUT000.csv"
+JOIN_TABLE = "BP_BUT020.csv"
+ADRESS_TABLE = "BP_ADRC.csv"
 
-load_dotenv()
+def load_env(logger=None) -> bool:
+    """
+    Load .env from common locations so the PyInstaller exe also finds it.
+    Returns True if a file was loaded.
+    """
+    exe_dir = Path(sys.argv[0]).resolve().parent
+    runtime_dir = Path(getattr(sys, "_MEIPASS", BASE_DIR))
+    candidates = [
+        BASE_DIR / ".env",
+        BASE_DIR.parent / ".env",
+        exe_dir / ".env",
+        runtime_dir / ".env",
+        Path.cwd() / ".env",
+    ]
+    for path in candidates:
+        if path.exists():
+            load_dotenv(path, override=True)
+            if logger:
+                logger.update_status(f".env chargé depuis {path}")
+            return True
+    load_dotenv(override=False)  # fallback to default behaviour
+    if logger:
+        logger.update_status("Aucun .env trouvé; variables d'environnement système utilisées.")
+    return False
+
+
+# Load env at import time for scripts; UI run will call again with logger for feedback.
+ENV_LOADED = load_env()
 
 
 def _normalize_bp_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
@@ -30,13 +66,14 @@ def _normalize_bp_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def create_paths():
-    directory = Path(os.getenv("DIRECTORY_LOCATION", "")).expanduser()
-    BUT_dir = r"\\interfacessap.file.core.windows.net\interfacess4p\data_mdm_export"
-    input_location = os.getenv("INPUTS")
-    input_file = os.getenv("INPUT_FILE")
-    names_file = os.getenv("NAMES_FILE")
-    join_table = os.getenv("JOIN_TABLE")
-    adress_table = os.getenv("ADRESS_TABLE")
+    # Build input/output paths using the configured base directories and current timestamp.
+    directory = Path(DIRECTORY_LOCATION).expanduser()
+    BUT_dir = INPUTS
+    input_location = INPUTS
+    input_file = INPUT_FILE
+    names_file = NAMES_FILE
+    join_table = JOIN_TABLE
+    adress_table = ADRESS_TABLE
     today = datetime.now().strftime("%Y-%m-%d_%H-%M_HANDCHECK_REPORT")
     output_dir = directory / today
     siren_directory = output_dir / "siren_siret"
@@ -130,7 +167,7 @@ def load_bp_csv(file_path: str, skip: int, logger: "TkLogViewer") -> pd.DataFram
 
 
 class TkLogViewer:
-    """Small log panel that captures stdout/stderr and displays them in Tk."""
+    """Small log panel that captures stdout/stderr and displays them in Tk (UI + file/log console)."""
 
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -178,6 +215,7 @@ class TkLogViewer:
 
 
 def run_pipeline(input_path: str, logger: TkLogViewer):
+    """Main ETL pipeline: load BP export, build dataset, run SIREN/SIRET + VAT checks, and write reports."""
     try:
         (
             _,
@@ -198,6 +236,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
         skip = detect_skiprows(target_input)
         df = load_bp_csv(target_input, skip, logger)
         df["value"] = df["value"].astype(str)
+        # Re-map VAT/type codes: keep FRx as-is; normalize EU VATs with code ending with 0 to FR0.
         dffr = df[df["type"].isin(["FR0", "FR1", "FR2"])].copy()
         dfeu = df[df["type"].isin([
             "DE0",
@@ -241,10 +280,13 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
             .rename(columns={"FR0": "VAT", "FR1": "siret", "FR2": "siren"})
             .astype(str)
         )
+        # After pivot: each BP has a single VAT/siret/siren row.
         if "VAT" not in df.columns:
             df["VAT"] = ""
 
         logger.update_status("Building partner dataset...")
+        
+        #Fetching all the datas about the valus by merging with other tables
         merged, _ = pp.build_partner_dataset(
             df=df,
             infos_path=names_path,
@@ -257,7 +299,9 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
         siren_df = merged[
             ~(merged["VAT"].isna() | merged["VAT"].astype(str).str.startswith("FR") | merged["VAT"] == "None")
         ]
+        logger.update_status(f"SIREN/SIRET candidates: {len(siren_df)} rows")
 
+        # Launch parallel checks: SIREN/SIRET API validation and VAT validation.
         siren_thread = threading.Thread(
             target=generate_report,
             kwargs={
@@ -265,6 +309,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
                 "input_dir": output_dir,
                 "output_dir": siren_directory,
                 "update_status": logger.update_status,
+                "logger": logger,
             },
             daemon=True,
         )
@@ -275,6 +320,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
                 "vat_column": "VAT",
                 "output_dir": VAT_directory,
                 "progress_callback": logger.update_status,
+                "logger": logger,
             },
             daemon=True,
         )
@@ -284,8 +330,9 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
         siren_thread.join()
         vat_thread.join()
 
+        # Assemble the final Excel outputs and (optionally) send by email.
         logger.update_status("Preparing final reports...")
-        me.main(output_dir)
+        me.main(path=output_dir, mail=False, logger=logger)
         logger.update_status("Processing completed.")
     except Exception as exc:
         logger.update_status(f"Error: {exc}")

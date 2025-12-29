@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 
+# Per-partner normalization utilities used before calling external SIREN/SIRET APIs.
 
 def _normalize_identifier(value: str):
     """

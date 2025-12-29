@@ -3,10 +3,12 @@ import sys
 from typing import Optional
 import pandas as pd
 from openpyxl import load_workbook
+import xlsxwriter  # explicit import so PyInstaller bundles the Excel writer engine
 import forSirenSiret.requestsiren as rsn
 import forSirenSiret.requestsiret as rst
 from thefuzz import fuzz
 
+# Main SIREN/SIRET verification pipeline: builds Excel report with conditional formatting.
 
 # Number of rows covered by conditional formatting rules (large enough for typical runs).
 MAX_FORMAT_ROWS = 200000
@@ -44,7 +46,6 @@ REPORT_COLUMNS = [
     "uses a snetor VAT",
     "Missmatching siren siret",
     "Missmatching siren VAT",
-    "Grouping",
     "Country/Region Key",
     "Language Key",
     "datas",
@@ -205,7 +206,18 @@ def _build_template(report_file: str, existing: Optional[pd.DataFrame] = None):
             {
                 "type": "formula",
                 "criteria": (
-                    f'=AND(OR($F2="Actif",$F2="Active"), {flags_all_false}, $U2="[]", $V2="[]", $W2="[]")'
+                    '=AND('
+                    'OR($F2="Actif",$F2="Active"),'
+                    '$V2="[]",'
+                    '$X2="False",'
+                    '$Y2="False",'
+                    '$Z2="False",'
+                    '$AA2="False",'
+                    '$AB2="False",'
+                    '$AC2="False",'
+                    '$AD2="False",'
+                    '$AE2="False"'
+                    ')'
                 ),
                 "format": green,
             },
@@ -252,7 +264,7 @@ def _ensure_template_v2(report_file: str):
         _build_template(report_file, existing)
 
 
-def resume_checks(processed_path: str, report_path: str, update_status=None):
+def resume_checks(processed_path: str, report_path: str, update_status=None, logger=None):
     """
     Reprend un processus de vérification interrompu.
 
@@ -268,11 +280,16 @@ def resume_checks(processed_path: str, report_path: str, update_status=None):
     if update_status is None:
         update_status = lambda msg: None
 
-    def log(msg: str):
-        print(msg, file=sys.stdout, flush=True)
+    def _log_debug(msg: str):
+        if logger is None:
+            return
+        if hasattr(logger, "debug"):
+            logger.debug(msg)
+        elif hasattr(logger, "log"):
+            logger.log(f"[DEBUG] {msg}")
 
     update_status("Chargement des données...")
-    log(f"[INFO] Resume requested. Data={processed_path} Report={report_path}")
+    _log_debug(f"Resume requested. Data={processed_path} Report={report_path}")
 
     try:
         df = pd.read_excel(processed_path, dtype=str).astype(str)
@@ -291,7 +308,7 @@ def resume_checks(processed_path: str, report_path: str, update_status=None):
     done_partners = set(existing.get("BP", []))
     remaining = df[~df[partner_col].isin(done_partners)]
 
-    log(f"[INFO] Existing report has {len(existing)} lignes. Remaining partners to process: {len(remaining)}")
+    _log_debug(f"Existing report has {len(existing)} lignes. Remaining partners to process: {len(remaining)}")
     if remaining.empty:
         update_status("Tout est déjà traité dans le rapport.")
         return report_path
@@ -306,8 +323,10 @@ def resume_checks(processed_path: str, report_path: str, update_status=None):
     return generate_report(
         remaining,
         input_dir,
+        output_dir=input_dir,
         update_status=update_status,
         report_path=report_path,
+        logger=logger,
     )
 
 
@@ -509,9 +528,10 @@ def reports_col(row):
 def generate_report(
     output: pd.DataFrame,
     input_dir: str,
-    output_dir : str,
+    output_dir: str,
     update_status=None,
     report_path: Optional[str] = None,
+    logger=None,
 ):
     """
     Génère le rapport de vérification final en itérant sur les données des partenaires,
@@ -527,15 +547,44 @@ def generate_report(
         update_status (callable, optional): Fonction de rappel pour les mises à jour de statut.
         report_path (Optional[str]): Chemin explicite vers le fichier de rapport. S'il est fourni,
                                      les nouvelles lignes seront ajoutées à ce fichier.
+        logger (optional): Logger optionnel (interface .log/.info/.warn) pour tracer les statuts.
     """
     if update_status is None:
         update_status = lambda msg: None
 
-    def log(msg: str):
-        print(msg, file=sys.stdout, flush=True)
+    def _log_info(msg: str):
+        if logger is None:
+            return
+        if hasattr(logger, "log"):
+            logger.log(msg)
+        elif hasattr(logger, "info"):
+            logger.info(msg)
+        else:
+            try:
+                logger(msg)
+            except Exception:
+                pass
+
+    def _log_warn(msg: str):
+        if logger is None:
+            return
+        if hasattr(logger, "warn"):
+            logger.warn(msg)
+        elif hasattr(logger, "warning"):
+            logger.warning(msg)
+        else:
+            _log_info(f"[WARN] {msg}")
+
+    def _log_debug(msg: str):
+        if logger is None:
+            return
+        if hasattr(logger, "debug"):
+            logger.debug(msg)
+        else:
+            _log_info(f"[DEBUG] {msg}")
 
     update_status("Generation du rapport (verification SIREN/SIRET)...")
-    log(f"[INFO] Report generation start: {len(output)} rows -> {output_dir}")
+    _log_debug(f"Report generation start: {len(output)} rows -> {output_dir}")
 
     report_file = report_path or os.path.join(output_dir, "latest_report.xlsx")
     update_status("Initialisation du rapport Excel...")
@@ -556,7 +605,8 @@ def generate_report(
         mode="a",
         if_sheet_exists="overlay",
     ) as writer:
-        for idx, row in output.iterrows():
+        # Walk through partners and decide which API calls to trigger (SIREN, SIRET, or both).
+        for counter, (_, row) in enumerate(output.iterrows(), start=1):
             BP = row.get("BP")
             siren = str(row.get("siren"))
             siret = str(row.get("siret"))
@@ -568,26 +618,26 @@ def generate_report(
             if siren.endswith(".0"):
                 siren = siren.split(".")[0]
 
-            update_status(f"Verification {idx+1}/{n_out} : partenaire {BP}")
-            log(f"[SIREN-SIRET] Checking {idx+1}/{n_out} BP={BP} siren={siren} siret={siret}")
+            update_status(f"Verification {counter}/{n_out} : partenaire {BP}")
+            _log_debug(f"Checking {counter}/{n_out} BP={BP} siren={siren} siret={siret}")
 
             # Case 1: missing/invalid SIRET -> check SIREN only
             # Si le SIRET est manquant ou invalide, on ne vérifie que le SIREN.
             if siret.lower() in ("", "none") or "invalid input" in siret.lower() or siret.lower() == "nan":
                 siren_line = _siren_only(row, BP, siren)
                 report = write_line(writer, report, siren_line, report_file)
-                log(f"[SIREN-SIRET]   -> SIREN only status={siren_line.get('status', [''])[0]}")
+                _log_info(f"BP={BP} type=siren status={_get_status(siren_line)}")
 
             # Case 2: SIRET present but not starting with SIREN -> check both SIREN and SIRET
             # Si le SIREN et le SIRET ne correspondent pas, les deux sont vérifiés séparément.
             elif siret[:9] != siren and not (siren in ("", "None") or "Invalid input" in siren):
                 siren_line = _siren_only(row, BP, siren)
                 report = write_line(writer, report, siren_line, report_file)
-                log(f"[SIREN-SIRET]   -> SIREN check status={siren_line.get('status', [''])[0]}")
+                _log_info(f"BP={BP} type=siren status={_get_status(siren_line)}")
 
                 siret_line = _siret_only(row, BP, siret)
                 report = write_line(writer, report, siret_line, report_file)
-                log(f"[SIREN-SIRET]   -> SIRET check status={siret_line.get('status', [''])[0]}")
+                _log_info(f"BP={BP} type=siret status={_get_status(siret_line)}")
 
             # Case 3: SIRET present and starts with SIREN -> check SIRET only
             # Si le SIRET est présent et semble valide (commence par le SIREN), on ne vérifie que le SIRET.
@@ -595,16 +645,38 @@ def generate_report(
                 siret_line = _siret_only(row, BP, siret)
                 report = write_line(writer, report, siret_line, report_file)
                 siret_status = _get_status(siret_line)
-                log(f"[SIREN-SIRET]   -> SIRET only status={siret_status}")
+                _log_info(f"BP={BP} type=siret status={siret_status}")
                 # Cas particulier : si le SIRET est inactif, on effectue quand même une vérification du SIREN
                 # pour voir si l'unité légale elle-même est toujours active.
                 if siret_status not in ("Active", "Actif") and isinstance(siren, str) and len(siren) == 9:
                     siren_line = _siren_only(row, BP, siren)
                     report = write_line(writer, report, siren_line, report_file)
-                    log(f"[WARN]   -> Added SIREN check after SIRET inactive status={_get_status(siren_line)}")
+                    _log_warn(f"BP={BP} inactive SIRET -> added SIREN check status={_get_status(siren_line)}")
             else:
                 line = row
                 report = write_line(writer, report, line, report_file)
-                log(f"[SIREN-SIRET]   -> No data for this BP")
+                _log_warn(f"BP={BP} skipped: no valid SIREN/SIRET provided")
 
     return report_file
+
+
+def main(
+    output: pd.DataFrame,
+    input_dir: str,
+    output_dir: str,
+    update_status=None,
+    report_path: Optional[str] = None,
+    logger=None,
+    ):
+    try:
+        generate_report(
+            output=output,
+            input_dir=input_dir,
+            output_dir=output_dir,
+            update_status=update_status,
+            report_path=report_path,
+            logger=logger,
+            )
+    except Exception as exc:
+        logger.error(f"Unexpected error in SIREN/SIRET verification pipeline: \n{exc}")
+        raise exc

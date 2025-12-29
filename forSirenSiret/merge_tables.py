@@ -1,5 +1,7 @@
 import pandas as pd
 
+# Helpers to stitch partner base info (names/addresses) onto processed SIREN/SIRET data.
+
 def concat_names(row):
     """
     Concatène les colonnes de nom ('Name', 'Name 2', 'Name 3') en une seule chaîne de caractères.

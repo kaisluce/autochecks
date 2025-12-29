@@ -5,6 +5,7 @@ import requests as rq
 from requests.exceptions import RequestException
 
 
+# Thin wrapper around the INSEE SIRENE API for SIREN lookups with retry logic.
 def _get_with_retry(url: str, delay: float = 3.0, max_duration: float = 600.0) -> rq.Response:
     """
     Retry GET until success or max_duration (seconds) is reached.

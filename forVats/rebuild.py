@@ -4,6 +4,19 @@ import re
 import pandas as pd
 
 
+def _log_helpers(logger=None):
+    def _info(msg):
+        if logger is None:
+            return
+        if hasattr(logger, "log"):
+            logger.log(msg)
+        elif hasattr(logger, "info"):
+            logger.info(msg)
+        else:
+            logger(msg)
+    return _info
+
+
 def _clean_vat(value) -> str:
     """
     Normalize VAT-like strings: strip spaces, remove non-alphanum, drop trailing .0.
@@ -19,11 +32,12 @@ def _clean_vat(value) -> str:
     return s.upper()
 
 
-def rebuild(path: str, infos: pd.DataFrame):
+def rebuild(path: str, infos: pd.DataFrame, logger=None):
     """
     Ajoute une colonne BP au report VATS, en croisant les VAT du report avec celles de `infos`.
     La clé est `MS Code` + `VAT Number` (normalisés).
     """
+    _info = _log_helpers(logger)
     report_path = os.path.join(path, "report_concatenated.xlsx")
     df = pd.read_excel(report_path, dtype=str)
 
@@ -45,4 +59,5 @@ def rebuild(path: str, infos: pd.DataFrame):
     df = df.drop(columns=["VAT_key"])
 
     df.to_excel(report_path, index=False)
+    _info(f"Rebuilt VAT report with BP column: {report_path}")
     return df

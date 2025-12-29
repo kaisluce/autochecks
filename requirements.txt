@@ -1,6 +1,8 @@
 dotenv
 pandas
 openpyxl
+xlsxwriter
+logging
 thefuzz
 requests
 cryptography

@@ -8,6 +8,7 @@ Headless pipeline that consolidates Business Partner identifiers, checks SIREN/S
 - SIRENE lookups flatten legal unit and establishment data, add duplicate and mismatch flags, and write a color-coded `latest_report.xlsx`.
 - VAT flow reformats values into batches of 100, uploads to VIES, polls tokens, downloads per-batch Excel files, concatenates them, and reattaches BP numbers.
 - Email step (Graph API + certificate auth) sends focused extracts: inactive SIRET/SIREN, duplicate SIRET, fuzzy name issues, invalid VATs.
+- Logging: every run writes a timestamped log file under `logs/`, capturing progress, warnings (input anomalies, fallbacks), and errors.
 
 ## How it works (pipeline)
 1) **Load inputs**: `.env` supplies paths. `main.py` reads the raw tax file (`INPUT_FILE` in `INPUTS`), keeps columns `[BP, value, type]`, pivots FR0 -> `VAT`, FR1 -> `siret`, FR2 -> `siren`, and maps EU VAT codes ending in `0` to FR0.

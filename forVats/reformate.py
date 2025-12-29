@@ -3,8 +3,36 @@ import os
 import openpyxl
 import pandas as pd
 
-def log_vat(message: str):
-    print(f"[VATS] {message}")
+
+def _log_helpers(logger=None):
+    def _info(msg):
+        if logger is None:
+            print(f"[VATS] {msg}")
+        elif hasattr(logger, "log"):
+            logger.log(msg)
+        elif hasattr(logger, "info"):
+            logger.info(msg)
+        else:
+            logger(msg)
+
+    def _warn(msg):
+        if logger is None:
+            print(f"[VATS][WARN] {msg}")
+        elif hasattr(logger, "warn"):
+            logger.warn(msg)
+        elif hasattr(logger, "warning"):
+            logger.warning(msg)
+        else:
+            _info(f"[WARN] {msg}")
+
+    def _debug(msg):
+        if logger is None:
+            print(f"[VATS][DEBUG] {msg}")
+        elif hasattr(logger, "debug"):
+            logger.debug(msg)
+        else:
+            _info(f"[DEBUG] {msg}")
+    return _info, _warn, _debug
 
 def reformate(
     df: pd.DataFrame,
@@ -12,6 +40,7 @@ def reformate(
     output_dir: str,
     requester_vat: str = "FR75383926409",
     progress_callback=None,
+    logger=None,
 ):
     """
     Split the VAT column into batches of 100 rows and write CSV batch files.
@@ -23,6 +52,7 @@ def reformate(
     :param requester_vat: VAT number of the requester.
     :param progress_callback: Optional callable receiving progress messages.
     """
+    _info, _warn, _debug = _log_helpers(logger)
     progress = progress_callback or (lambda message: None)
     data_dir = os.path.join(output_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -31,13 +61,13 @@ def reformate(
         df = df.copy()
         df[column] = ""
 
-    log_vat(f"Input rows: {len(df)}")
+    _debug(f"Input rows: {len(df)}")
     df = df.copy()
     df.dropna(subset=[column], inplace=True)
     df = df[df[column] != "None"]
     df = df.drop_duplicates(subset=["VAT"])
     progress(f"Reformatting data into {((len(df)) // 100) + 1} files.")
-    log_vat(f"Rows after VAT dropna: {len(df)}")
+    _debug(f"Rows after VAT dropna: {len(df)}")
 
     new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
     rq_c_code = requester_vat[:2]
@@ -62,7 +92,7 @@ def reformate(
             new_df = pd.concat([new_df, newline])
             if num % 100 == 0:
                 output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // 100:03d}.csv")
-                log_vat(f"{num} Saving {output_file} with {len(new_df)} entries")
+                _info(f"{num} Saving {output_file} with {len(new_df)} entries")
                 new_df.to_csv(output_file, index=False)
                 new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
             num += 1
@@ -80,6 +110,6 @@ def reformate(
         while new_df.shape[0] <= 3:
             new_df = pd.concat([new_df, new_line])
         output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // 100:03d}.csv")
-        log_vat(f"Saving {output_file} with {len(new_df)} entries")
+        _info(f"Saving {output_file} with {len(new_df)} entries")
         new_df.to_csv(output_file, index=False)
     progress(f"submitting {(num // 100) + 1} files.")
