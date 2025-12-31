@@ -80,8 +80,10 @@ def compare_names(row):
     """
     name1 = row.get('denomination')
     name2 = row.get('Name 1')
-    if pd.isna(name1) or pd.isna(name2) or name1 == 'nan' or name2 == 'nan':
+    if pd.isna(name2) or name2 == 'nan':
         return 'Missing name'
+    if pd.isna(name1) or name1 == 'nan' or name1 == '' or name1 ==  None:
+        return 'Name not fetched'
     
     score = fuzz.token_set_ratio(name1, name2)
     if score == 100:

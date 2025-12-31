@@ -1,0 +1,36 @@
+[INFO] 12/29/2025 04:38:57 PM : Logger succesfully created
+[INFO] 12/29/2025 04:38:57 PM : Starting Process
+[WARNING] 12/29/2025 04:38:58 PM : Skiprows detected (1) for input file, possible header anomaly.
+[INFO] 12/29/2025 04:39:01 PM : Building partner dataset: 3656 input rows, output -> Z:\MDM\998_CHecks\2025-12-29_16-38_REPORT\latest_datas.xlsx
+[ERROR] 12/29/2025 04:39:32 PM : Unexpected error
+Traceback (most recent call last):
+  File "C:\Users\K.luce\AppData\Local\Programs\Python\Python314\Lib\site-packages\pandas\core\indexes\base.py", line 3812, in get_loc
+    return self._engine.get_loc(casted_key)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "pandas/_libs/index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7088, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7096, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'adressID'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\K.luce\OneDrive - SNETOR\Documents\autochecks\main.py", line 143, in main
+    merged, merged_path = pp.build_partner_dataset(
+                          ~~~~~~~~~~~~~~~~~~~~~~~~^
+        df=df,
+        ^^^^^^
+    ...<4 lines>...
+        logger=logger,
+        ^^^^^^^^^^^^^^
+        )
+        ^
+  File "c:\Users\K.luce\OneDrive - SNETOR\Documents\autochecks\forSirenSiret\partner_processing.py", line 239, in build_partner_dataset
+    output["has_addressID"] = output["adressID"].apply(_is_valid)
+                              ~~~~~~^^^^^^^^^^^^
+  File "C:\Users\K.luce\AppData\Local\Programs\Python\Python314\Lib\site-packages\pandas\core\frame.py", line 4113, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "C:\Users\K.luce\AppData\Local\Programs\Python\Python314\Lib\site-packages\pandas\core\indexes\base.py", line 3819, in get_loc
+    raise KeyError(key) from err
+KeyError: 'adressID'

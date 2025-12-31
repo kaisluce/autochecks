@@ -1,0 +1,4 @@
+[INFO] 12/29/2025 03:52:10 PM : Logger succesfully created
+[INFO] 12/29/2025 03:52:10 PM : Starting Process
+[WARNING] 12/29/2025 03:52:10 PM : Skiprows detected (1) for input file, possible header anomaly.
+[INFO] 12/29/2025 03:52:12 PM : Building partner dataset: 3656 input rows, output -> Z:\MDM\998_CHecks\2025-12-29_15-52_REPORT\latest_datas.xlsx

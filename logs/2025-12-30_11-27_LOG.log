@@ -1,0 +1,56 @@
+[INFO] 12/30/2025 11:27:10 AM : Logger succesfully created
+[INFO] 12/30/2025 11:27:10 AM : Starting Process
+[WARNING] 12/30/2025 11:27:11 AM : Skiprows detected (1) for input file, possible header anomaly.
+[INFO] 12/30/2025 11:27:19 AM : Building partner dataset: 3657 input rows, output -> Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\latest_datas.xlsx
+[INFO] 12/30/2025 11:27:50 AM : Final partner dataset saved: Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\latest_datas.xlsx (3639 rows)
+[INFO] 12/30/2025 11:27:50 AM : Partner dataset built: Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\latest_datas.xlsx (3639 rows)
+[INFO] 12/30/2025 11:27:50 AM : VAT process started for column 'VAT' in Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat
+[INFO] 12/30/2025 11:27:50 AM : 100 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part000.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 200 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part001.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 300 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part002.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 400 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part003.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 500 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part004.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 600 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part005.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 700 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part006.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 800 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part007.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 900 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part008.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 1000 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part009.csv with 100 entries
+[INFO] 12/30/2025 11:27:50 AM : 1100 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part010.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 1200 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part011.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 1300 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part012.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 1400 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part013.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : BP=0000900080 type=siret status=Actif
+[INFO] 12/30/2025 11:27:51 AM : 1500 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part014.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 1600 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part015.csv with 100 entries
+[WARNING] 12/30/2025 11:27:51 AM : BP=0000900081 skipped: no valid SIREN/SIRET provided
+[INFO] 12/30/2025 11:27:51 AM : 1700 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part016.csv with 100 entries
+[WARNING] 12/30/2025 11:27:51 AM : BP=0000900083 skipped: no valid SIREN/SIRET provided
+[INFO] 12/30/2025 11:27:51 AM : 1800 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part017.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 1900 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part018.csv with 100 entries
+[WARNING] 12/30/2025 11:27:51 AM : BP=0000900084 skipped: no valid SIREN/SIRET provided
+[INFO] 12/30/2025 11:27:51 AM : 2000 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part019.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 2100 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part020.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 2200 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part021.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 2300 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part022.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 2400 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part023.csv with 100 entries
+[INFO] 12/30/2025 11:27:51 AM : 2500 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part024.csv with 100 entries
+[INFO] 12/30/2025 11:27:52 AM : 2600 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part025.csv with 100 entries
+[INFO] 12/30/2025 11:27:52 AM : 2700 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part026.csv with 100 entries
+[INFO] 12/30/2025 11:27:52 AM : BP=0000900085 type=siret status=Actif
+[INFO] 12/30/2025 11:27:52 AM : 2800 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part027.csv with 100 entries
+[INFO] 12/30/2025 11:27:52 AM : 2900 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part028.csv with 100 entries
+[WARNING] 12/30/2025 11:27:52 AM : BP=0000910024 skipped: no valid SIREN/SIRET provided
+[INFO] 12/30/2025 11:27:52 AM : 3000 Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part029.csv with 100 entries
+[WARNING] 12/30/2025 11:27:52 AM : BP=0000910025 skipped: no valid SIREN/SIRET provided
+[INFO] 12/30/2025 11:27:52 AM : Saving Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part030.csv with 64 entries
+[INFO] 12/30/2025 11:27:52 AM : Preparing to submit 31 batch files from Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data
+[INFO] 12/30/2025 11:27:52 AM : Submitting batch file Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part000.csv
+[INFO] 12/30/2025 11:27:53 AM : BP=0000990011 type=siret status=Actif
+[INFO] 12/30/2025 11:27:53 AM : Recieved token : PROCESSING
+[INFO] 12/30/2025 11:27:53 AM : Batch Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part000.csv accepted, token cad0f325-05df-41fc-8cfd-3e16d152ed7a
+[INFO] 12/30/2025 11:27:53 AM : Batch file vat_data_part000.csv submitted successfully.
+[INFO] 12/30/2025 11:27:53 AM : Submitting batch file Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part001.csv
+[INFO] 12/30/2025 11:27:54 AM : BP=0000990012 type=siret status=Actif
+[INFO] 12/30/2025 11:27:55 AM : Recieved token : REJECTED
+[INFO] 12/30/2025 11:27:55 AM : Submitting batch file Z:\MDM\998_CHecks\2025-12-30_11-27_REPORT\vat\data\vat_data_part001.csv
+[INFO] 12/30/2025 11:27:55 AM : BP=0001000000 type=siret status=Actif

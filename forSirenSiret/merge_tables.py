@@ -35,15 +35,16 @@ def merge_df(datas : pd.DataFrame, infos_part : pd.DataFrame):
     Returns:
         pd.DataFrame: Le DataFrame fusionné et nettoyé.
     """
-    # Filtrer pour ne conserver que les groupes pertinents (ZG0-ZG13, sauf ZG11) et les partenaires français.
-    grouping_num = pd.to_numeric(infos_part['Grp.'].str[2:], errors='coerce')
-    infos_part = infos_part[infos_part['Grp.'].str.startswith('ZG') & (grouping_num >= 1) & (grouping_num <= 13) & (grouping_num != 11)]
 
     #infos_part = infos_part[infos_part["Country/Region Key"] == "FR"]
 
     # Renommer la colonne pour correspondre à la clé de fusion et effectuer la fusion.
     infos_part = infos_part.rename(columns={infos_part.columns[0]: "BP"})
-    merged = pd.merge(datas, infos_part, on='BP', how='outer')
+    merged = pd.merge(datas, infos_part, on='BP', how='left')
+    
+    # Filtrer pour ne conserver que les groupes pertinents (ZG0-ZG13, sauf ZG11) et les partenaires français.
+    grouping_num = pd.to_numeric(merged['Grp.'].str[2:], errors='coerce')
+    merged = merged[merged['Grp.'].str.startswith('ZG') & (grouping_num >= 1) & (grouping_num <= 13) & (grouping_num != 11)]
 
 
     # Appliquer les fonctions de concaténation et supprimer les colonnes d'origine.

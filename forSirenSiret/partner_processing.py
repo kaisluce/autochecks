@@ -21,10 +21,14 @@ def _normalize_bp_value(value: str) -> str:
     # Remove a trailing .0 introduced by Excel-like casts
     if s.endswith(".0"):
         s = s[:-2]
-    # Keep only digits for padding; if no digits remain, fall back to the trimmed string.
-    digits = "".join(ch for ch in s if ch.isdigit())
-    if digits:
-        return digits.zfill(10)
+    # Only pad when the cleaned value is purely numeric (ignoring spaces/commas), to avoid dropping characters.
+    numeric_candidate = (
+        s.replace(" ", "")
+        .replace("\u00a0", "")  # non-breaking space
+        .replace(",", "")
+    )
+    if numeric_candidate.isdigit():
+        return numeric_candidate.zfill(10)
     return s
 
 def _coerce_id_columns(frame: pd.DataFrame) -> pd.DataFrame:
@@ -86,6 +90,19 @@ def build_partner_dataset(
             logger.debug(msg)
         else:
             _log_info(f"[DEBUG] {msg}")
+            
+    
+    def _is_valid(value) -> bool:
+        if pd.isna(value):
+            return False
+        s = str(value).strip()
+        return s and s.lower() not in {"nan", "none", "null", ".", "x", "na", "n/a", "naan", "xx", "xxx"} and len(s) >= 3
+
+    def _is_valid_postcode(value) -> bool:
+        if not _is_valid(value):
+            return False
+        s = str(value).strip()
+        return s not in {"0000", "00000", "9999", "99999"}
 
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "latest_datas.xlsx")
@@ -154,7 +171,7 @@ def build_partner_dataset(
             _log_warn(f"Missing address columns: {sorted(missing_cols)}")
     
     
-    adress_table = pd.merge(left=join_table, right=adress_table, on="Addr. No.", how="outer")
+    adress_table = pd.merge(left=join_table, right=adress_table, on="Addr. No.", how="left")
     
     
     
@@ -220,8 +237,16 @@ def build_partner_dataset(
         errors="ignore")
     check_cols = [col for col in output.columns if col != "BP"]
     adress_table.rename(columns={"Business Partner": "BP"}, inplace=True)
-    output = pd.merge(left=output, right=adress_table, on="BP", how="outer")
+    # Enrichir avec les adresses sans créer de nouvelles lignes (BP manquants à gauche sont ignorés).
+    output = pd.merge(left=output, right=adress_table, on="BP", how="left")
     output = output.dropna(subset=check_cols, how="all")
+    
+    output["has_street"] = output["street"].apply(_is_valid)
+    output["has_street4"] = output["street4"].apply(_is_valid)
+    output["has_street5"] = output["street5"].apply(_is_valid)
+    output["has_city"] = output["city"].apply(_is_valid)
+    output["has_postcode"] = output["postcode"].apply(_is_valid_postcode)
+    output["has_country"] = output["country"].apply(_is_valid)
     
     output.to_excel(output_path, index=False)
     _log_info(f"Final partner dataset saved: {output_path} ({len(output)} rows)")

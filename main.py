@@ -151,9 +151,13 @@ def main():
         logger.log(f"Partner dataset built: {merged_path} ({len(merged)} rows)")
         # print(merged.describe())
         # Prepare subset needing SIREN/SIRET verification (skip pure FR VATs), then run both flows in parallel.
+        # Normalize VAT/country before filtering to avoid misses due to casing/spacing.
+        vat_clean = merged["VAT"].astype(str).str.strip().str.upper()
+        country_clean = merged["country"].astype(str).str.strip().str.upper()
         siren_df = merged[
-            ~(merged["VAT"].isna() | merged["VAT"].astype(str).str.startswith("FR") | merged["VAT"] == "None")
+            vat_clean.str.startswith("FR") | country_clean.isin(["FR", "FRANCE"])
         ]
+        logger.debug(siren_df.describe())
         logger.debug(f"SIREN/SIRET candidate rows: {len(siren_df)} / {len(merged)}")
         siren_thread = threading.Thread(
             target=SSmain,
