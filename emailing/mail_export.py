@@ -81,7 +81,7 @@ def get_duplicated_siret(df: pd.DataFrame):
 
 
 def get_wrong_name(df: pd.DataFrame):
-    return df[df["diagnostic_name"] != "exact"]
+    return df[~(df["diagnostic_name"].isin(["exact", "Name not fetched"]))]
 
 
 def get_bad_VAT(df: pd.DataFrame):
