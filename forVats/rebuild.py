@@ -49,6 +49,14 @@ def rebuild(path: str, infos: pd.DataFrame, logger=None):
         .apply(list)
         .to_dict()
     )
+    name_col = "Name 1"
+    vat_to_names = {}
+    if name_col in infos.columns:
+        vat_to_names = (
+            infos.groupby("VAT_clean")[name_col]
+            .apply(list)
+            .to_dict()
+        )
 
     # Construit la clé VAT pour le report et associe les BP
     df["VAT_key"] = (
@@ -56,6 +64,8 @@ def rebuild(path: str, infos: pd.DataFrame, logger=None):
         + df["VAT Number"].map(_clean_vat)
     )
     df["BP"] = df["VAT_key"].map(vat_to_bps).apply(lambda x: x if isinstance(x, list) else [])
+    if vat_to_names:
+        df["Name 1"] = df["VAT_key"].map(vat_to_names).apply(lambda x: x if isinstance(x, list) else [])
     df = df.drop(columns=["VAT_key"])
 
     df.to_excel(report_path, index=False)

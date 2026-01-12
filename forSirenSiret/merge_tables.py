@@ -43,8 +43,18 @@ def merge_df(datas : pd.DataFrame, infos_part : pd.DataFrame):
     merged = pd.merge(datas, infos_part, on='BP', how='left')
     
     # Filtrer pour ne conserver que les groupes pertinents (ZG0-ZG13, sauf ZG11) et les partenaires français.
-    grouping_num = pd.to_numeric(merged['Grp.'].str[2:], errors='coerce')
-    merged = merged[merged['Grp.'].str.startswith('ZG') & (grouping_num >= 1) & (grouping_num <= 13) & (grouping_num != 11)]
+    if "Grp." in merged.columns:
+        grp_series = merged["Grp."].astype(str)
+        grouping_num = pd.to_numeric(grp_series.str[2:], errors="coerce")
+        mask = (
+            grp_series.str.startswith("ZG")
+            & (grouping_num >= 1)
+            & (grouping_num <= 13)
+            & (grouping_num != 11)
+        )
+        # If the mask matches nothing (e.g., all NaN after merge), keep rows to avoid empty output.
+        if mask.any():
+            merged = merged[mask]
 
 
     # Appliquer les fonctions de concaténation et supprimer les colonnes d'origine.

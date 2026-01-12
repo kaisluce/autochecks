@@ -16,10 +16,11 @@ from forSirenSiret.checks import generate_report
 from forVats.process import process
 
 import emailing.mail_export as me
+import logger as filelog
 
 # Base directory and default fallbacks; normally .env overrides these.
 BASE_DIR = Path(__file__).resolve().parent
-DIRECTORY_LOCATION=r"Z:\MDM\998_CHecks"
+DIRECTORY_LOCATION=r"Z:\MDM\998_CHecks\AUTOCHECKS"
 INPUTS = "\\\\interfacessap.file.core.windows.net\\interfacess4p\\data_mdm_export"
 INPUT_FILE="BP_TAXNUM.csv"
 NAMES_FILE="BP_BUT000.csv"
@@ -217,6 +218,8 @@ class TkLogViewer:
 def run_pipeline(input_path: str, logger: TkLogViewer):
     """Main ETL pipeline: load BP export, build dataset, run SIREN/SIRET + VAT checks, and write reports."""
     try:
+        # File logger for structured logs (console + file), UI logger for status/messages.
+        run_logger = filelog.logger(mail=False)
         (
             _,
             names_path,
@@ -283,6 +286,10 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
         # After pivot: each BP has a single VAT/siret/siren row.
         if "VAT" not in df.columns:
             df["VAT"] = ""
+        if "siret" not in df.columns:
+            df["siret"] = ""
+        if "siren" not in df.columns:
+            df["siren"] = ""
 
         logger.update_status("Building partner dataset...")
         
@@ -292,12 +299,16 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
             infos_path=names_path,
             output_dir=output_dir,
             join_table_path=join_path,
-            adress_table_path=adress_path,
+            address_table_path=adress_path,
             update_status=logger.update_status,
+            logger=run_logger,
         )
 
+        vat_clean = merged["VAT"].astype(str).str.strip().str.upper()
+        country_series = merged["country"] if "country" in merged.columns else pd.Series("", index=merged.index)
+        country_clean = country_series.astype(str).str.strip().str.upper()
         siren_df = merged[
-            ~(merged["VAT"].isna() | merged["VAT"].astype(str).str.startswith("FR") | merged["VAT"] == "None")
+            vat_clean.str.startswith("FR") | country_clean.isin(["FR", "FRANCE"])
         ]
         logger.update_status(f"SIREN/SIRET candidates: {len(siren_df)} rows")
 
@@ -309,7 +320,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
                 "input_dir": output_dir,
                 "output_dir": siren_directory,
                 "update_status": logger.update_status,
-                "logger": logger,
+                "logger": run_logger,
             },
             daemon=True,
         )
@@ -320,7 +331,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
                 "vat_column": "VAT",
                 "output_dir": VAT_directory,
                 "progress_callback": logger.update_status,
-                "logger": logger,
+                "logger": run_logger,
             },
             daemon=True,
         )
@@ -332,7 +343,7 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
 
         # Assemble the final Excel outputs and (optionally) send by email.
         logger.update_status("Preparing final reports...")
-        me.main(path=output_dir, mail=False, logger=logger)
+        me.main(path=output_dir, mail=False, logger=run_logger)
         logger.update_status("Processing completed.")
     except Exception as exc:
         logger.update_status(f"Error: {exc}")

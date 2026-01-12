@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -45,7 +47,17 @@ class logger():
     def error(self, msg, *args, **kwargs):
         self.logger.error(msg, *args, **kwargs)
         if self.mail:
-            mailtemplate.errormail(msg)
+            details = msg
+            if kwargs.get("exc_info"):
+                # Include full traceback in the email body.
+                details = f"{msg}\n\n{traceback.format_exc()}"
+            # errormail is async; run it safely from sync logging.
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                asyncio.run(mailtemplate.errormail(details, logger=self))
+            else:
+                loop.create_task(mailtemplate.errormail(details, logger=self))
         
 def createlogfilepath():
     """Return a timestamped log file path under the local `logs` directory."""

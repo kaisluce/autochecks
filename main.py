@@ -19,7 +19,7 @@ load_dotenv()
 def create_paths():
     """Resolve all inputs/outputs (env-driven) and create date-stamped directories."""
     directory = Path(os.getenv("DIRECTORY_LOCATION", "")).expanduser()
-    input_location = os.getenv("INPUTS")
+    input_location = Path(os.getenv("INPUTS")).expanduser()
     input_file = os.getenv("INPUT_FILE")
     names_file = os.getenv("NAMES_FILE")
     join_tabme = os.getenv("JOIN_TABLE")
@@ -62,7 +62,6 @@ def main():
     logger.log("Logger succesfully created")
     logger.log("Starting Process")
     try:
-        
 
         (
             input_path,
@@ -145,7 +144,7 @@ def main():
             infos_path=names_path,
             output_dir=output_dir,
             join_table_path=join_path,
-            adress_table_path=adress_path,
+            address_table_path=adress_path,
             logger=logger,
             )
         logger.log(f"Partner dataset built: {merged_path} ({len(merged)} rows)")
@@ -157,6 +156,8 @@ def main():
         siren_df = merged[
             vat_clean.str.startswith("FR") | country_clean.isin(["FR", "FRANCE"])
         ]
+        siren_df = siren_df.head(90)
+        merged = merged.head(90)
         logger.debug(siren_df.describe())
         logger.debug(f"SIREN/SIRET candidate rows: {len(siren_df)} / {len(merged)}")
         siren_thread = threading.Thread(

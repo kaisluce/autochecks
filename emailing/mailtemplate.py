@@ -19,6 +19,8 @@ import datetime
 # Microsoft Graph email helper: loads config/cert and sends reports.
 # Charge clientId/tenantId depuis config.cfg (et config.dev.cfg si present)
 BASE_DIR = Path(__file__).resolve().parent
+# DEFAULT_RECIPIENT = "masterdata@snetor.com"
+DEFAULT_RECIPIENT = "k.luce@snetor.com"
 
 
 def _candidate_paths() -> list[Path]:
@@ -176,7 +178,7 @@ async def main(subject : str | "Global", file_path : str | None = None, logger=N
             content=mail_body,
         ),
         to_recipients=[
-            Recipient(email_address=EmailAddress(address="masterdata@snetor.com"))
+            Recipient(email_address=EmailAddress(address=DEFAULT_RECIPIENT))
             # Recipient(email_address=EmailAddress(address="k.luce@snetor.com"))
         ],
     )
@@ -222,9 +224,11 @@ async def errormail(error_message: str, subject: str = "Autochecks error", logge
     tenant_id = azure_settings["tenantId"]
     client_id = azure_settings["clientId"]
 
+    # PFX place a la racine du projet par defaut, surcharge possible via config
     cert_path_setting = azure_settings.get("certificatePath", "MDMPythonGraphV2.pfx")
     cert_path = Path(cert_path_setting)
     if not cert_path.is_absolute():
+        # Resolve relative paths from the emailing/ directory so the script remains portable
         cert_path = (BASE_DIR / cert_path).resolve()
     cert_password = azure_settings.get("certificatePassword") or None
     if cert_password and cert_password.startswith('"') and cert_password.endswith('"'):
@@ -249,7 +253,7 @@ async def errormail(error_message: str, subject: str = "Autochecks error", logge
             content=f"<p>An error occurred during the Autochecks run:</p><pre>{error_message}</pre>",
         ),
         to_recipients=[
-            Recipient(email_address=EmailAddress(address="masterdata@snetor.com"))
+            Recipient(email_address=EmailAddress(address=DEFAULT_RECIPIENT))
         ],
     )
 

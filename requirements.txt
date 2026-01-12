@@ -1,10 +1,10 @@
-dotenv
+python-dotenv
 pandas
 openpyxl
 xlsxwriter
-logging
 thefuzz
 requests
 cryptography
 msgraph-sdk
+msgraph-core
 azure-identity

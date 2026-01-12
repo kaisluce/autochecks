@@ -1,9 +1,17 @@
 import os
+import sys
 from pathlib import Path
 import asyncio
 
 import pandas as pd
 from dotenv import load_dotenv
+
+# Ensure project root is on sys.path so imports work whether run as module or script.
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import fetchNames.get_names_from_last_report as get_names
 
 if __name__ == "__main__":
     import mailtemplate as mailtemplate
@@ -81,7 +89,7 @@ def get_duplicated_siret(df: pd.DataFrame):
 
 
 def get_wrong_name(df: pd.DataFrame):
-    return df[~(df["diagnostic_name"].isin(["exact", "Name not fetched"]))]
+    return df[~(df["name match diag"].isin(["exact", "Name not fetched", "Missing name"]))]
 
 
 def get_bad_VAT(df: pd.DataFrame):
@@ -114,21 +122,28 @@ def main(path: str, mail: bool = True, logger=None):
     _info, _warn, _debug, _error = _logger_helpers(logger)
     df1_path = os.path.join(path, "siren_siret/latest_report.xlsx")
     vat_path = os.path.join(path, "vat/report_concatenated.xlsx")
+    datas_path = os.path.join(path, "latest_datas.xlsx")
     _debug(f"Loading reports: {df1_path}, {vat_path}")
     df1 = pd.read_excel(df1_path, dtype=str)
     vat = pd.read_excel(vat_path, dtype=str)
+    datas = pd.read_excel(datas_path, dtype=str)
     df1 = _coerce_id_columns(df1)
     vat = _coerce_id_columns(vat)
+    datas = _coerce_id_columns(datas)
     closed_path = os.path.join(path, "siren_siret/closed_siret.xlsx")
     stopped_path = os.path.join(path, "siren_siret/closed_siren.xlsx")
     dupe_path = os.path.join(path, "siren_siret/duplicated_siret.xlsx")
-    wrong_path = os.path.join(path, "siren_siret/wrong_name.xlsx")
+    wrong_path = os.path.join(path, "wrong_name.xlsx")
     bad_vat_path = os.path.join(path, "vat/bad_vats.xlsx")
+    fetchedNames_path = os.path.join(path, "fetchedNames.xlsx")
     closed = get_closed_siret(df1)
     stopped = get_stopped_siren(df1)
     dupe = get_duplicated_siret(df1)
-    wrong = get_wrong_name(df1)
     bad_vat = get_bad_VAT(vat)
+    fetchedNames = get_names.main(vat, datas, df1, logger)
+    save_df(fetchedNames, fetchedNames_path, logger=logger)
+    wrong = get_wrong_name(fetchedNames)
+
 
     if not closed.empty:
         save_df(closed, closed_path, logger=logger)
@@ -172,42 +187,7 @@ def main(path: str, mail: bool = True, logger=None):
 
 
 if __name__ == "__main__":
-    # Debug/manual entry point (kept for compatibility)
-    path = r"Z:\MDM\998_CHecks\2025-12-22_11-57_HANDCHECK_REPORT"
-    df1_path = os.path.join(path, "siren_siret/latest_report.xlsx")
-    vat_path = os.path.join(path, "vat/report_concatenated.xlsx")
-    df1 = pd.read_excel(df1_path, dtype=str)
-    vat = pd.read_excel(vat_path, dtype=str)
-    df1 = _coerce_id_columns(df1)
-    vat = _coerce_id_columns(vat)
-    closed_path = os.path.join(path, "siren_siret/closed_siret.xlsx")
-    stopped_path = os.path.join(path, "siren_siret/stopped_siren.xlsx")
-    dupe_path = os.path.join(path, "siren_siret/duplicated_siret.xlsx")
-    wrong_path = os.path.join(path, "siren_siret/wrong_name.xlsx")
-    bad_vat_path = os.path.join(path, "vat/bad_vats.xlsx")
-    closed = get_closed_siret(df1)
-    stopped = get_stopped_siren(df1)
-    dupe = get_duplicated_siret(df1)
-    wrong = get_wrong_name(df1)
-    bad_vat = get_bad_VAT(vat)
-
-    if not closed.empty:
-        send_with_file(closed_path)
-    else:
-        send("closed_siret")
-    if not stopped.empty:
-        send_with_file(stopped_path)
-    else:
-        send("stopped_siren")
-    if not dupe.empty:
-        send_with_file(dupe_path)
-    else:
-        send("duplicated_siret")
-    if not wrong.empty:
-        send_with_file(wrong_path)
-    else:
-        send("wrong_name")
-    if not bad_vat.empty:
-        send_with_file(bad_vat_path)
-    else:
-        send("bad_vats")
+    import logger
+    path = r"Z:\MDM\998_CHecks\2026-01-05_03-02_REPORT"
+    logger = logger.logger(mail=False)
+    main(path, mail=False, logger=logger)

@@ -7,6 +7,7 @@ Headless pipeline that consolidates Business Partner identifiers, checks SIREN/S
 - Builds a clean partner dataset from SAP exports (pivot FR0/FR1/FR2 codes, normalize IDs, merge names and address tables) into `latest_datas.xlsx`.
 - SIRENE lookups flatten legal unit and establishment data, add duplicate and mismatch flags, and write a color-coded `latest_report.xlsx`.
 - VAT flow reformats values into batches of 100, uploads to VIES, polls tokens, downloads per-batch Excel files, concatenates them, and reattaches BP numbers.
+- Name fetcher for German/Spanish VATs: calls the VAT search API, rebuilds `Fetched Name`, and compares against SAP names to flag differences.
 - Email step (Graph API + certificate auth) sends focused extracts: inactive SIRET/SIREN, duplicate SIRET, fuzzy name issues, invalid VATs.
 - Logging: every run writes a timestamped log file under `logs/`, capturing progress, warnings (input anomalies, fallbacks), and errors.
 
@@ -50,6 +51,7 @@ Only the first 3 columns are used and renamed `BP`, `type`, `value`. EU codes en
 - `<DIRECTORY_LOCATION>/<timestamp>/latest_datas.xlsx`: consolidated partner lines with normalized IDs, duplicates, address flags, and BP metadata.
 - `.../siren_siret/latest_report.xlsx`: SIREN/SIRET API results with status, NAF, address, duplicate lists, and diagnostic columns (`report`, `diagnostic_name`).
 - `.../vat/report_concatenated.xlsx`: merged VIES results with original source file names and BP linkage.
+- `.../fetchedNames.xlsx`: German/Spanish VAT name retrieval with `Fetched Name`, `SAP Name`, name match diagnosis, and scores.
 - `.../siren_siret/closed_siret.xlsx`, `.../closed_siren.xlsx`, `.../duplicated_siret.xlsx`, `.../wrong_name.xlsx`, `.../vat/bad_vats.xlsx`: anomaly extracts used by the mailer.
 
 ### Output file structure (key columns)

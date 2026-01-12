@@ -16,6 +16,7 @@ MAX_FORMAT_ROWS = 200000
 # Ceci est crucial pour la cohérence lors de l'écriture et de la relecture des données.
 REPORT_COLUMNS = [
     "BP",
+    "VAT",
     "type",
     "siret",
     "nic",

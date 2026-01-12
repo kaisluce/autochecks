@@ -47,7 +47,7 @@ def build_partner_dataset(
     df: pd.DataFrame,
     infos_path: str,
     join_table_path: str,
-    adress_table_path: str,
+    address_table_path: str,
     output_dir: str,
     update_status=None,
     logger=None,
@@ -109,23 +109,52 @@ def build_partner_dataset(
 
     output = pd.DataFrame().astype(str)
     output.to_excel(output_path, index=False)
-    _log_debug(f"Initialized output file at {output_path}")
+    _log_debug(f"Initialized datas file at {output_path}")
 
     # Lecture du fichier infos (CSV séparé par ;), en ignorant les lignes malformées.
     infos = pd.read_csv(
         infos_path,
         sep=";",
         dtype=str,
+        quoting=csv.QUOTE_NONE,
         on_bad_lines="skip",
         engine="python",
+        header=0,
     ).astype(str)
+    expected_cols = [
+        "Business Partner",
+        "Grp.",
+        "Arch. Flag",
+        "Central",
+        "AGrp",
+        "Search Term 1",
+        "Search Term 2",
+        "Name 1",
+        "Ext. No.",
+        "CatP",
+        "Name 2",
+        "Last Name",
+        "First Name",
+        "Date",
+        "User",
+        "Name 3",
+        "Name 4",
+        "Date.1",
+        "User.1",
+    ]
+    if len(infos.columns) >= len(expected_cols):
+        infos.columns = expected_cols + list(infos.columns[len(expected_cols):])
     infos = _coerce_id_columns(infos)
+    if "Business Partner" in infos.columns:
+        infos["Business Partner"] = infos["Business Partner"].apply(_normalize_bp_value)
     _log_debug(f"Infos file loaded: {infos_path} ({len(infos)} rows)")
     
-    
+    print(infos.describe())
     df = _coerce_id_columns(df)
+    if "BP" in df.columns:
+        df["BP"] = df["BP"].apply(_normalize_bp_value)
     df = mt.merge_df(df, infos)
-    _log_debug("Merged base dataframe with infos")
+    _log_debug(f"Merged base dataframe with infos : \n{df.describe()}")
     
     join_table = pd.read_csv(
         join_table_path,
@@ -139,45 +168,45 @@ def build_partner_dataset(
     join_table = join_table[["Business Partner", "Addr. No."]]
     join_table = join_table.sort_values(by=["Business Partner", "Addr. No."], ascending=[True, False])
     join_table = join_table.drop_duplicates(subset=["Business Partner"])
-    adress_table = pd.read_csv(
-        adress_table_path,
+    address_table = pd.read_csv(
+        address_table_path,
         sep=";",
         engine="python",
         quoting=csv.QUOTE_NONE,
         on_bad_lines="skip",
         dtype=str,
     )
-    adress_table = _coerce_id_columns(adress_table)
-    if adress_table.empty:
-        _log_warn(f"Address table empty or unreadable: {adress_table_path}")
-    elif len(adress_table.columns) < 30:
-        _log_warn(f"Address table has unexpected format ({len(adress_table.columns)} columns), skipping address merge.")
-        adress_table = pd.DataFrame(columns=["Addr. No."])
+    address_table = _coerce_id_columns(address_table)
+    if address_table.empty:
+        _log_warn(f"Address table empty or unreadable: {address_table_path}")
+    elif len(address_table.columns) < 30:
+        _log_warn(f"Address table has unexpected format ({len(address_table.columns)} columns), skipping address merge.")
+        address_table = pd.DataFrame(columns=["Addr. No."])
     else:
         rename_map = {
-            adress_table.columns[0]: "Addr. No.",
-            adress_table.columns[26]: "street",
-            adress_table.columns[29]: "street4",
-            adress_table.columns[20]: "street5",
-            adress_table.columns[5]: "city",
-            adress_table.columns[4]: "postcode",
-            adress_table.columns[11]: "country",
+            address_table.columns[0]: "Addr. No.",
+            address_table.columns[26]: "street",
+            address_table.columns[29]: "street4",
+            address_table.columns[20]: "street5",
+            address_table.columns[5]: "city",
+            address_table.columns[4]: "postcode",
+            address_table.columns[11]: "country",
         }
-        adress_table.rename(columns=rename_map, inplace=True)
-        keep_columns = [col for col in ("Addr. No.", "street", "street4", "street5", "city", "postcode", "country") if col in adress_table.columns]
-        adress_table = adress_table[keep_columns]
-        missing_cols = set(["street", "street4", "street5", "city", "postcode", "country"]) - set(adress_table.columns)
+        address_table.rename(columns=rename_map, inplace=True)
+        keep_columns = [col for col in ("Addr. No.", "street", "street4", "street5", "city", "postcode", "country") if col in address_table.columns]
+        address_table = address_table[keep_columns]
+        missing_cols = set(["street", "street4", "street5", "city", "postcode", "country"]) - set(address_table.columns)
         if missing_cols:
             _log_warn(f"Missing address columns: {sorted(missing_cols)}")
     
     
-    adress_table = pd.merge(left=join_table, right=adress_table, on="Addr. No.", how="left")
+    address_table = pd.merge(left=join_table, right=address_table, on="Addr. No.", how="left")
     
     
     
     # Normaliser les types pour la jointure adresse.
-    if not adress_table.empty:
-        adress_table.iloc[:, 0] = adress_table.iloc[:, 0].astype(str)
+    if not address_table.empty:
+        address_table.iloc[:, 0] = address_table.iloc[:, 0].astype(str)
     done = []
     n_df = len(df)
 
@@ -197,7 +226,7 @@ def build_partner_dataset(
                 merged_row = row.to_dict()
                 merged_row.update(part_data)
                 newline = pd.DataFrame([merged_row]).astype(str)
-                # newline = merge_address(newline, join_table, adress_table)
+                # newline = merge_address(newline, join_table, address_table)
                 output = pd.concat([output, newline], ignore_index=True)
 
                 output.tail(1).to_excel(
@@ -225,20 +254,27 @@ def build_partner_dataset(
         columns=[
             "Arch. Flag",
             "Central", "AGrp",
-            "Grp.",
             "Search Term 1",
             "Search Term 2",
             "External BP Number",
             "BPC",
-            "Last name",
-            "First name",
+            "Ext. No.",
+            "CatP",
+            "Last Name",
+            "First Name",
+            "Date",
+            "User",
+            "Date.1",
+            "User.1",
             "Unnamed: 19"
         ],
         errors="ignore")
     check_cols = [col for col in output.columns if col != "BP"]
-    adress_table.rename(columns={"Business Partner": "BP"}, inplace=True)
+    _log_debug(output)
+    address_table.rename(columns={address_table.columns[0]: "BP"}, inplace=True)
+    output.rename(columns={output.columns[0]: "BP"}, inplace=True)
     # Enrichir avec les adresses sans créer de nouvelles lignes (BP manquants à gauche sont ignorés).
-    output = pd.merge(left=output, right=adress_table, on="BP", how="left")
+    output = pd.merge(left=output, right=address_table, on="BP", how="left")
     output = output.dropna(subset=check_cols, how="all")
     
     output["has_street"] = output["street"].apply(_is_valid)
@@ -252,93 +288,3 @@ def build_partner_dataset(
     _log_info(f"Final partner dataset saved: {output_path} ({len(output)} rows)")
 
     return output, output_path
-
-# Redéfinition de merge_address pour traiter tout un DataFrame et corriger l'application au niveau des lignes.
-def merge_address(datas: pd.DataFrame, join_table: pd.DataFrame, adress_table: pd.DataFrame):
-    """
-    Complète les champs d'adresse pour chaque ligne du DataFrame.
-    Sélectionne le plus grand `adress_ID` pour un BP donné et renseigne les flags `has_*`
-    en excluant les valeurs vides ou placeholders.
-    """
-    
-    print(f"[DEBUG] Processing BP={datas.iloc[0].get('partner', '')}")
-    def _is_valid(value) -> bool:
-        if pd.isna(value):
-            return False
-        s = str(value).strip()
-        return s and s.lower() not in {"nan", "none", "null", ".", "x", "na", "n/a", "naan", "xx", "xxx"} and len(s) >= 3
-
-    def _is_valid_postcode(value) -> bool:
-        if not _is_valid(value):
-            return False
-        s = str(value).strip()
-        return s not in {"0000", "00000", "9999", "99999"}
-
-
-    addr_key = adress_table.columns[0] if (not adress_table.empty and len(adress_table.columns) > 0) else None
-    if addr_key is not None:
-        adress_table[addr_key] = adress_table[addr_key].astype(str)
-
-    def _fill_row(row: pd.Series) -> pd.Series:
-        print(f"[DEBUG] Processing BP={row.get('partner', '')}")
-        bp_val = str(row.get("partner", ""))
-        matches = join_table[join_table["Business Partner"] == bp_val]
-        print(f"[DEBUG]   Matches for BP={bp_val}: {len(matches)}")
-
-        # valeurs par défaut
-        row["adressID"] = ""
-        row["street"] = ""
-        row["street4"] = ""
-        row["street5"] = ""
-        row["city"] = ""
-        row["postcode"] = ""
-        row["has_addressID"] = False
-        row["has_street"] = False
-        row["has_street4"] = False
-        row["has_street5"] = False
-        row["has_city"] = False
-        row["has_postcode"] = False
-
-        if matches.empty or addr_key is None:
-            print(f"[DEBUG]   No matches in join_table or addr_key missing for BP={bp_val}")
-            return row
-
-        adress_id = matches["Addr. No."].max()
-        row["adressID"] = adress_id
-        row["has_addressID"] = _is_valid(adress_id)
-        if not row["has_addressID"]:
-            print(f"[DEBUG]   Invalid adress_ID={adress_id} for BP={bp_val}")
-            return row
-
-        address_match = adress_table[adress_table[addr_key] == str(adress_id)]
-        if address_match.empty:
-            print(f"[DEBUG]   No address row for adress_ID={adress_id} (BP={bp_val})")
-            return row
-
-        adress = address_match.iloc[0]
-
-        street = adress.get("street")
-        street4 = adress.get("street4")
-        street5 = adress.get("street5")
-        city = adress.get("city")
-        postcode = adress.get("postcode")
-        country = adress.get("country")
-
-        print(f"[DEBUG]   Fields for BP={bp_val} / adress_ID={adress_id}: street={street} street4={street4} street5={street5} city={city} postcode={postcode}")
-
-        row["street"] = street
-        row["street4"] = street4
-        row["street5"] = street5
-        row["city"] = city
-        row["postcode"] = postcode
-        row["country"] = country
-
-        row["has_street"] = _is_valid(street)
-        row["has_street4"] = _is_valid(street4)
-        row["has_street5"] = _is_valid(street5)
-        row["has_city"] = _is_valid(city)
-        row["has_postcode"] = _is_valid_postcode(postcode)
-
-        return row
-
-    return datas.apply(_fill_row, axis=1)
