@@ -156,8 +156,8 @@ def main():
         siren_df = merged[
             vat_clean.str.startswith("FR") | country_clean.isin(["FR", "FRANCE"])
         ]
-        siren_df = siren_df.head(90)
-        merged = merged.head(90)
+        # siren_df = siren_df.head(90)
+        # merged = merged.head(90)
         logger.debug(siren_df.describe())
         logger.debug(f"SIREN/SIRET candidate rows: {len(siren_df)} / {len(merged)}")
         siren_thread = threading.Thread(
