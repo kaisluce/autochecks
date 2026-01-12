@@ -19,8 +19,8 @@ import datetime
 # Microsoft Graph email helper: loads config/cert and sends reports.
 # Charge clientId/tenantId depuis config.cfg (et config.dev.cfg si present)
 BASE_DIR = Path(__file__).resolve().parent
-# DEFAULT_RECIPIENT = "masterdata@snetor.com"
-DEFAULT_RECIPIENT = "k.luce@snetor.com"
+DEFAULT_RECIPIENT = "masterdata@snetor.com"
+# DEFAULT_RECIPIENT = "k.luce@snetor.com"
 
 
 def _candidate_paths() -> list[Path]:
