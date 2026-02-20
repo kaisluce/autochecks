@@ -99,7 +99,7 @@ def main(vatDf : pd.DataFrame, DatasDf : pd.DataFrame, sirenDF : pd.DataFrame, l
     
     # Drop duplicated columns from the SIREN/SIRET merge and clean suffixes.
     drop_cols = [
-        "VAT_y", "type", "siret_y", "nic", "siren_y", "status", "siege", "denomination",
+        "VAT_y", "type", "siret_y", "nic", "siren_y", "status", "siege",
         "date_creation", "date_cessation", "siret_siege", "naf", "naf_label", "cat_juridique",
         "adresse", "n_voie", "voie", "code_postal", "commune",
         "duplicates_siren_y", "duplicates_siret_y", "duplicates_VAT_y",
@@ -113,6 +113,7 @@ def main(vatDf : pd.DataFrame, DatasDf : pd.DataFrame, sirenDF : pd.DataFrame, l
     
     #Check for the names similarity
     DatasDf = DatasDf.apply(compare_names, axis=1)
+    DatasDf.drop(columns=["denomination"])
     _debug(DatasDf.describe(include='all'))
 
     # Keep best score per BP, then restore BP order for readability.
@@ -139,8 +140,8 @@ def main(vatDf : pd.DataFrame, DatasDf : pd.DataFrame, sirenDF : pd.DataFrame, l
     return DatasDf
 
 if __name__ == "__main__":
-    vatDf = pd.read_excel(r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-02-20_03-02_REPORT\vat\report_concatenated.xlsx").astype(str)
-    DatasDf = pd.read_excel(r"z:\MDM\998_CHecks\AUTOCHECKS\2026-02-20_03-02_REPORT\latest_datas.xlsx").astype(str)
-    SirenDF = pd.read_excel(r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-02-20_03-02_REPORT\siren_siret\latest_report.xlsx").astype(str)
+    vatDf = pd.read_excel(r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\2026-02-20_03-02_REPORT\vat\report_concatenated.xlsx").astype(str)
+    DatasDf = pd.read_excel(r"z:\MDM\998_CHecks\BP-AUTOCHECKS\2026-02-20_03-02_REPORT\latest_datas.xlsx").astype(str)
+    SirenDF = pd.read_excel(r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\2026-02-20_03-02_REPORT\siren_siret\latest_report.xlsx").astype(str)
     result = main(vatDf, DatasDf, SirenDF)
     result.to_excel(OUTPUT, index=False)

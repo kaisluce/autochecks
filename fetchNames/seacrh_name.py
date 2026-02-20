@@ -85,8 +85,8 @@ def get_name_from_nif(nif, country_code, timeout=20, max_retries=3, retry_delay=
 
 
 if __name__ == "__main__":
-    nif = "A50996933"
-    name = get_name_from_nif(nif, "ES")
+    nif = "DE230225490"
+    name = get_name_from_nif(nif, "DE")
 
     if name:
         print(f"{nif} -> {name}")

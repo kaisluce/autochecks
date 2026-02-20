@@ -49,7 +49,7 @@ Only the first 3 columns are used and renamed `BP`, `type`, `value`. EU codes en
 
 ## Outputs
 - `<DIRECTORY_LOCATION>/<timestamp>/latest_datas.xlsx`: consolidated partner lines with normalized IDs, duplicates, address flags, and BP metadata.
-- `.../siren_siret/latest_report.xlsx`: SIREN/SIRET API results with status, NAF, address, duplicate lists, and diagnostic columns (`report`, `diagnostic_name`).
+- `.../siren_siret/latest_report.xlsx`: SIREN/SIRET API results with status, NAF, address, duplicate lists, and diagnostic columns (`report`).
 - `.../vat/report_concatenated.xlsx`: merged VIES results with original source file names and BP linkage.
 - `.../fetchedNames.xlsx`: German/Spanish VAT name retrieval with `Fetched Name`, `SAP Name`, name match diagnosis, and scores.
 - `.../siren_siret/closed_siret.xlsx`, `.../closed_siren.xlsx`, `.../duplicated_siret.xlsx`, `.../wrong_name.xlsx`, `.../vat/bad_vats.xlsx`: anomaly extracts used by the mailer.
@@ -63,7 +63,7 @@ Only the first 3 columns are used and renamed `BP`, `type`, `value`. EU codes en
   - Identifiers: `BP`, `type` (siren/siret), `siret`, `nic`, `siren`
   - INSEE data: `status`, `siege`, `denomination`, `date_creation`, `date_cessation`, `naf`, `naf_label`, `cat_juridique`, `adresse`, `n_voie`, `voie`, `code_postal`, `commune`, `siret_siege`
   - Local checks: `duplicates_*`, `missing *`, `uses a snetor *`, `Missmatching siren *`
-  - Summary: `report`, `diagnostic_name`
+  - Summary: `report`
 - `vat/report_concatenated.xlsx`:
   - VIES columns: `MS Code`, `VAT Number`, `Requester MS Code`, `Requester VAT Number`, VIES validity/status fields
   - Local additions: `__source_file__` (origin batch), `BP` (list of BPs matching the VAT)

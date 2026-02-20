@@ -61,7 +61,6 @@ REPORT_COLUMNS = [
     "Language Key",
     "datas",
     "report",
-    "diagnostic_name",
 ]
 # Seuils pour la comparaison floue des noms et des rues.
 # Un score supérieur à ce seuil est considéré comme une "légère différence".
@@ -464,7 +463,6 @@ def reports_col(row):
     """
     Génère les colonnes de diagnostic et de rapport de synthèse.
     - `report`: Fournit un résumé lisible de l'état de la ligne.
-    - `diagnostic_name`: Résultat de la comparaison de noms.
     - `diagnostic_street`: Résultat de la comparaison d'adresses.
     Args:
         row (pd.DataFrame): Le DataFrame (généralement une seule ligne) à traiter.
@@ -532,8 +530,6 @@ def reports_col(row):
         ~cond_all_good & ~cond_active
     ]
     row.loc[cond_all_good & cond_active, "report"] = "Everything is valid"
-
-    row["diagnostic_name"] = row.apply(compare_names, axis=1)
     return row
 
         

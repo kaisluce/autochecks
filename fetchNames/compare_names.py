@@ -23,9 +23,12 @@ def compare_names(row):
         row['name score'] = 0
         return row
     if pd.isna(name1) or name1 == 'nan' or name1 == '' or name1 == '---' or name1 ==  None:
-        row['name match diag'] =  'Name not fetched'
-        row['name score'] = 0
-        return row
+        name1 = row.get('denomination')
+        if pd.isna(name1) or name1 == 'nan' or name1 == '':
+            row['name match diag'] =  'Name not fetched'
+            row['name score'] = 0
+            return row
+        row['Fetched Name'] = name1
     
     score = fuzz.token_set_ratio(name1, name2)
     if score == 100:
