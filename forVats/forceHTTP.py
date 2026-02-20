@@ -30,4 +30,4 @@ def upload_batch(file_path):
     }
 
     # send the POST request and return the response
-    return requests.post(url, headers=headers, files=files)
+    return requests.post(url, headers=headers, files=files, timeout=30)

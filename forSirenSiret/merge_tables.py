@@ -71,6 +71,19 @@ def merge_df(datas : pd.DataFrame, infos_part : pd.DataFrame):
 
     
     merged = merged[~merged["Name 1"].str.startswith("#", na=False)]
+    
+    if "First Name" in merged.columns:
+        merged = merged[~merged["First Name"].str.startswith("#", na=False)]
+    else :
+        print("Missing column 'First Name' in dataframe")
+    if "Last Name" in merged.columns:
+        merged = merged[~merged["Last Name"].str.startswith("#", na=False)]
+    else :
+        print("Missing column 'Last Name' in dataframe")
+    if "Search Term 1" in merged.columns:
+        merged = merged[~merged["Search Term 1"].str.startswith("#", na=False)]
+    else :
+        print("Missing column 'Search Term 1' in dataframe")
     merged = merged.astype(str)
 
     return merged

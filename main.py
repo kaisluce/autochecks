@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
-import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -160,28 +160,39 @@ def main():
         # merged = merged.head(90)
         logger.debug(siren_df.describe())
         logger.debug(f"SIREN/SIRET candidate rows: {len(siren_df)} / {len(merged)}")
-        siren_thread = threading.Thread(
-            target=SSmain,
-            kwargs={"output": siren_df, "input_dir": output_dir, "output_dir": siren_directory, "logger": logger},
-        )
-        vat_thread = threading.Thread(
-            target=vat_process.process,
-            kwargs={"df": merged, "vat_column": "VAT", "output_dir": VAT_directory, "logger": logger},
-        )
-    except Exception as exc:
-        logger.error("Unexpected error", exc_info=True)
-        raise
-    # Kick off both flows in parallel; main thread waits before emailing reports.
-    siren_thread.start()
-    vat_thread.start()
-    siren_thread.join()
-    vat_thread.join()
-    try:
+        # Run both flows in parallel and propagate worker exceptions to main thread.
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                executor.submit(
+                    SSmain,
+                    output=siren_df,
+                    input_dir=output_dir,
+                    output_dir=siren_directory,
+                    logger=logger,
+                ): "SIREN/SIRET",
+                executor.submit(
+                    vat_process.main,
+                    df=merged,
+                    vat_column="VAT",
+                    output_dir=VAT_directory,
+                    logger=logger,
+                ): "VAT",
+            }
+
+            for future in as_completed(futures):
+                flow_name = futures[future]
+                try:
+                    future.result()
+                    logger.log(f"{flow_name} flow completed successfully.")
+                except Exception:
+                    logger.error(f"{flow_name} flow failed", exc_info=True)
+                    raise
+
         logger.log("SIREN/SIRET and VAT processing completed")
         # Export anomalies and optionally send by email.
         me.main(output_dir, logger=logger)
     except Exception as exc:
-        logger.error("Unexpected error while making final reports", exc_info=True)
+        logger.error("Unexpected error", exc_info=True)
         raise
     
 

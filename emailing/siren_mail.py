@@ -1,10 +1,9 @@
+import asyncio
 import os
 import sys
-import asyncio
 from pathlib import Path
 
 import pandas as pd
-from dotenv import load_dotenv
 
 # Ensure project root is on sys.path so imports work whether run as module or script.
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,10 +17,6 @@ if __name__ == "__main__":
 else:
     import emailing.mailtemplate as mailtemplate
 
-
-load_dotenv()
-
-DIRECTORY_LOCATION = os.path.join(os.getenv("DIRECTORY_LOCATION", ""), "2025-12-10_12-03_REPORT")
 
 ID_COLUMNS = ("BP", "Business Partner", "siren", "siret")
 
@@ -57,8 +52,16 @@ def _coerce_id_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def get_wrong_name(df: pd.DataFrame) -> pd.DataFrame:
-    return df[~(df["name match diag"].isin(["exact", "Name not fetched", "Missing name"]))]
+def get_closed_siret(df: pd.DataFrame) -> pd.DataFrame:
+    return df[df["status"].isin(["Ferm\u00e9", "FermÃ©", "FermÃƒÂ©"])]
+
+
+def get_stopped_siren(df: pd.DataFrame) -> pd.DataFrame:
+    return df[df["status"].isin(["Cess\u00e9e", "CessÃ©e", "CessÃƒÂ©e"])]
+
+
+def get_duplicated_siret(df: pd.DataFrame) -> pd.DataFrame:
+    return df[df["duplicates_siret"] != "[]"]
 
 
 def _save_df(df: pd.DataFrame, path: str, logger=None):
@@ -81,44 +84,41 @@ def _send(subject: str, logger=None) -> None:
     asyncio.run(mailtemplate.main(subject, logger=logger))
 
 
+def _dispatch_report(df: pd.DataFrame, output_path: str, empty_subject: str, mail: bool, logger=None):
+    _info, _warn = _logger_helpers(logger)
+    try:
+        if not df.empty:
+            _save_df(df, output_path, logger=logger)
+            if mail:
+                _send_with_file(output_path, logger=logger)
+        elif mail:
+            _info(f"No {empty_subject} anomalies; sending empty notification.")
+            _send(empty_subject, logger=logger)
+    except Exception as e:
+        _warn(f"Error while sending {empty_subject} mail :\n{e}")
+
+
 def main(path: str, mail: bool = True, logger=None):
     _info, _warn = _logger_helpers(logger)
-    _info("Starting names mail export")
-
+    _info("Starting the mail process for the Siren/Siret job")
     siren_path = os.path.join(path, r"siren_siret\latest_report.xlsx")
-    vat_path = os.path.join(path, r"vat\report_concatenated.xlsx")
     datas_path = os.path.join(path, r"latest_datas.xlsx")
-    fetched_names_path = os.path.join(path, r"fetchedNames.xlsx")
-    wrong_path = os.path.join(path, r"wrong_name.xlsx")
 
     df1 = pd.read_excel(siren_path, dtype=str)
-    vat = pd.read_excel(vat_path, dtype=str)
     datas = pd.read_excel(datas_path, dtype=str)
     df1 = _coerce_id_columns(df1)
-    vat = _coerce_id_columns(vat)
     datas = _coerce_id_columns(datas)
 
-    fetched_names = get_names.main(vat, datas, df1, logger)
-    _save_df(fetched_names, fetched_names_path, logger=logger)
-    wrong = get_wrong_name(fetched_names)
+    closed_path = os.path.join(path, r"siren_siret\closed_siret.xlsx")
+    stopped_path = os.path.join(path, r"siren_siret\closed_siren.xlsx")
+    dupe_path = os.path.join(path, r"siren_siret\duplicated_siret.xlsx")
 
-    try:
-        if not wrong.empty:
-            _save_df(wrong, wrong_path, logger=logger)
-            if mail:
-                _send_with_file(wrong_path, logger=logger)
-        elif mail:
-            _info("No wrong_name anomalies; sending empty notification.")
-            _send("wrong_name", logger=logger)
-    except Exception as e:
-        _warn(f"Error while sending wrong_name mail :\n{e}")
+    closed = get_closed_siret(df1)
+    stopped = get_stopped_siren(df1)
+    dupe = get_duplicated_siret(df1)
 
-    _info("Names mail export finished.")
+    _dispatch_report(closed, closed_path, "closed_siret", mail=mail, logger=logger)
+    _dispatch_report(stopped, stopped_path, "closed_siren", mail=mail, logger=logger)
+    _dispatch_report(dupe, dupe_path, "duplicated_siret", mail=mail, logger=logger)
 
-
-if __name__ == "__main__":
-    import logger
-
-    path = r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-02-13_03-02_REPORT_fortest"
-    logger = logger.logger(mail=True)
-    main(path=path, mail=False, logger=logger)
+    _info("SIREN/SIRET mail export finished.")

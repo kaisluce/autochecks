@@ -1,27 +1,21 @@
+import asyncio
+import json
 import os
 import sys
-import asyncio
 from pathlib import Path
 
 import pandas as pd
-from dotenv import load_dotenv
 
 # Ensure project root is on sys.path so imports work whether run as module or script.
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import fetchNames.get_names_from_last_report as get_names
-
 if __name__ == "__main__":
     import mailtemplate as mailtemplate
 else:
     import emailing.mailtemplate as mailtemplate
 
-
-load_dotenv()
-
-DIRECTORY_LOCATION = os.path.join(os.getenv("DIRECTORY_LOCATION", ""), "2025-12-10_12-03_REPORT")
 
 ID_COLUMNS = ("BP", "Business Partner", "siren", "siret")
 
@@ -57,8 +51,24 @@ def _coerce_id_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def get_wrong_name(df: pd.DataFrame) -> pd.DataFrame:
-    return df[~(df["name match diag"].isin(["exact", "Name not fetched", "Missing name"]))]
+def get_bad_vat(df: pd.DataFrame) -> pd.DataFrame:
+    wrong = df[df["Valid"] == "NO"]
+    wrong = wrong[wrong["VAT Number"] != "XXXXXXXXXXXXXX"]
+    if not wrong.empty:
+        with open(
+            r"\\snetor-docs\Users\\MDM\998_CHecks\BP-AUTOCHECKS\VAT EXEPTIONS\ignoreVAT.json",
+            "r",
+            encoding="utf-8",
+        ) as f:
+            data = json.load(f)
+        vats = set(data["vats"])
+        vat_full = wrong["MS Code"].astype(str) + wrong["VAT Number"].astype(str)
+        wrong = wrong[~vat_full.isin(vats)]
+    return wrong
+
+
+def get_bad_VAT(df: pd.DataFrame) -> pd.DataFrame:
+    return get_bad_vat(df)
 
 
 def _save_df(df: pd.DataFrame, path: str, logger=None):
@@ -83,42 +93,22 @@ def _send(subject: str, logger=None) -> None:
 
 def main(path: str, mail: bool = True, logger=None):
     _info, _warn = _logger_helpers(logger)
-    _info("Starting names mail export")
-
-    siren_path = os.path.join(path, r"siren_siret\latest_report.xlsx")
     vat_path = os.path.join(path, r"vat\report_concatenated.xlsx")
-    datas_path = os.path.join(path, r"latest_datas.xlsx")
-    fetched_names_path = os.path.join(path, r"fetchedNames.xlsx")
-    wrong_path = os.path.join(path, r"wrong_name.xlsx")
+    bad_vat_path = os.path.join(path, r"vat\bad_vats.xlsx")
 
-    df1 = pd.read_excel(siren_path, dtype=str)
     vat = pd.read_excel(vat_path, dtype=str)
-    datas = pd.read_excel(datas_path, dtype=str)
-    df1 = _coerce_id_columns(df1)
     vat = _coerce_id_columns(vat)
-    datas = _coerce_id_columns(datas)
-
-    fetched_names = get_names.main(vat, datas, df1, logger)
-    _save_df(fetched_names, fetched_names_path, logger=logger)
-    wrong = get_wrong_name(fetched_names)
+    bad_vat = get_bad_vat(vat)
 
     try:
-        if not wrong.empty:
-            _save_df(wrong, wrong_path, logger=logger)
+        if not bad_vat.empty:
+            _save_df(bad_vat, bad_vat_path, logger=logger)
             if mail:
-                _send_with_file(wrong_path, logger=logger)
+                _send_with_file(bad_vat_path, logger=logger)
         elif mail:
-            _info("No wrong_name anomalies; sending empty notification.")
-            _send("wrong_name", logger=logger)
+            _info("No bad_vats anomalies; sending empty notification.")
+            _send("bad_vats", logger=logger)
     except Exception as e:
-        _warn(f"Error while sending wrong_name mail :\n{e}")
+        _warn(f"Error while sending bad_vats mail :\n{e}")
 
-    _info("Names mail export finished.")
-
-
-if __name__ == "__main__":
-    import logger
-
-    path = r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-02-13_03-02_REPORT_fortest"
-    logger = logger.logger(mail=True)
-    main(path=path, mail=False, logger=logger)
+    _info("VAT mail export finished.")

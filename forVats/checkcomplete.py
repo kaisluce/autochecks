@@ -6,6 +6,7 @@ import time
 import forVats.batchFile as bf
 import forVats.downloadrepport as do
 import forVats.get_status as gs
+from requests.exceptions import RequestException
 
 
 def _log_helpers(logger=None):
@@ -82,22 +83,42 @@ def main(responses: dict, work_dir: str, token_file: str, progress_callback=None
 
             if status_str == "PROCESSING":
                 token = response.get("data", {}).get("token")
-                status = gs.get_status(token)
+                try:
+                    status = gs.get_status(token)
+                except RequestException as req_exc:
+                    _warn(f"Network error checking status for {file}: {req_exc}")
+                    done = False
+                    continue
 
                 if status.status_code != 200:
                     _warn(f"Error checking status for {file}: HTTP {status.status_code}")
+                    done = False
                     continue
 
-                status_json = status.json()
+                try:
+                    status_json = status.json()
+                except ValueError as json_exc:
+                    _warn(f"Invalid JSON status payload for {file}: {json_exc}")
+                    done = False
+                    continue
                 responses[file]["data"] = status_json
 
                 _info(f"New status: {status_json.get('status', '(no status)').upper()}")
 
                 if status_json.get("status", "").upper() == "COMPLETED" or status_json.get("percentage") == 100.0:
+                    try:
+                        do.main(token, os.path.join(reports_dir, f"{os.path.splitext(file)[0]}_report.xlsx"))
+                    except RequestException as req_exc:
+                        _warn(f"Network error downloading report for {file}: {req_exc}")
+                        done = False
+                        continue
+                    except OSError as io_exc:
+                        _warn(f"File error while saving report for {file}: {io_exc}")
+                        done = False
+                        continue
+
                     _info(f"Batch file {file} completed.")
                     responses[file]["status"] = "COMPLETED"
-
-                    do.main(token, os.path.join(reports_dir, f"{os.path.splitext(file)[0]}_report.xlsx"))
                     progress(f"Downloaded report for file {filenb + 1}/{len(responses)}.")
                 else:
                     done = False

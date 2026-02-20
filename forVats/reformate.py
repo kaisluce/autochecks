@@ -3,6 +3,7 @@ import os
 import openpyxl
 import pandas as pd
 
+FILESIZE = 50
 
 def _log_helpers(logger=None):
     def _info(msg):
@@ -43,7 +44,7 @@ def reformate(
     logger=None,
 ):
     """
-    Split the VAT column into batches of 100 rows and write CSV batch files.
+    Split the VAT column into batches of FILESIZE rows and write CSV batch files.
 
     :param df: Source dataframe containing the VAT column.
     :param column: Name of the VAT column to process.
@@ -66,7 +67,7 @@ def reformate(
     df.dropna(subset=[column], inplace=True)
     df = df[df[column] != "None"]
     df = df.drop_duplicates(subset=["VAT"])
-    progress(f"Reformatting data into {((len(df)) // 100) + 1} files.")
+    progress(f"Reformatting data into {((len(df)) // FILESIZE) + 1} files.")
     _debug(f"Rows after VAT dropna: {len(df)}")
 
     new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
@@ -90,8 +91,8 @@ def reformate(
                 ]
             )
             new_df = pd.concat([new_df, newline])
-            if num % 100 == 0:
-                output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // 100:03d}.csv")
+            if num % FILESIZE == 0:
+                output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // FILESIZE:03d}.csv")
                 _info(f"{num} Saving {output_file} with {len(new_df)} entries")
                 new_df.to_csv(output_file, index=False)
                 new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
@@ -109,7 +110,7 @@ def reformate(
         )
         while new_df.shape[0] <= 3:
             new_df = pd.concat([new_df, new_line])
-        output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // 100:03d}.csv")
+        output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // FILESIZE:03d}.csv")
         _info(f"Saving {output_file} with {len(new_df)} entries")
         new_df.to_csv(output_file, index=False)
-    progress(f"submitting {(num // 100) + 1} files.")
+    progress(f"submitting {(num // FILESIZE) + 1} files.")

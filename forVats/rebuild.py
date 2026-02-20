@@ -38,7 +38,7 @@ def rebuild(path: str, infos: pd.DataFrame, logger=None):
     La clé est `MS Code` + `VAT Number` (normalisés).
     """
     _info = _log_helpers(logger)
-    report_path = os.path.join(path, "report_concatenated.xlsx")
+    report_path = os.path.join(path, r"report_concatenated.xlsx")
     df = pd.read_excel(report_path, dtype=str)
 
     # Prépare une table VAT -> liste de BP depuis les infos d'origine
@@ -71,3 +71,10 @@ def rebuild(path: str, infos: pd.DataFrame, logger=None):
     df.to_excel(report_path, index=False)
     _info(f"Rebuilt VAT report with BP column: {report_path}")
     return df
+
+
+if __name__ == "__main__":
+    report_dir = r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-01-14_10-01_REPORT\vat"
+    datas_path = r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-01-14_10-01_REPORT\latest_datas.xlsx"
+    infos_df = pd.read_excel(datas_path).astype(str)
+    rebuild(report_dir, infos_df)

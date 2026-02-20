@@ -217,6 +217,7 @@ class TkLogViewer:
 
 def run_pipeline(input_path: str, logger: TkLogViewer):
     """Main ETL pipeline: load BP export, build dataset, run SIREN/SIRET + VAT checks, and write reports."""
+    run_logger = None
     try:
         # File logger for structured logs (console + file), UI logger for status/messages.
         run_logger = filelog.logger(mail=False)
@@ -346,7 +347,11 @@ def run_pipeline(input_path: str, logger: TkLogViewer):
         me.main(path=output_dir, mail=False, logger=run_logger)
         logger.update_status("Processing completed.")
     except Exception as exc:
-        logger.update_status(f"Error: {exc}")
+        tb = traceback.format_exc()
+        if run_logger is not None:
+            run_logger.error("Handcheck pipeline failed", exc_info=True)
+        logger.update_status(f"Error: {exc}. Voir le traceback dans le log ci-dessous.")
+        logger.write(tb)
 
 
 if __name__ == "__main__":

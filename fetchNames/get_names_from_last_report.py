@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 import logging
+from requests.exceptions import RequestException
 
 if __name__ == "__main__":
     from seacrh_name import get_name_from_nif
@@ -27,13 +28,29 @@ def fetch_names(row, logger=None):
     :param logger: Logger used to debug and keep track of the execution
     """
     global index    #index global variable, used to keep track of the progress
-    nif = row.get("VAT Number")
-    name = get_name_from_nif(nif, row["MS Code"])   #calls the function that fetch the name of the bp
-    
+
     #assigning print or theloger functions depending of if we have the logger or not
     _debug = logger.debug if logger else print
     _warn = logger.warn if logger else print
-    
+
+    nif = row.get("VAT Number")
+    country_code = str(row.get("MS Code", "")).strip().upper()
+
+    try:
+        name = get_name_from_nif(nif, country_code)   #calls the function that fetch the name of the bp
+    except RequestException as exc:
+        _warn(f"Erreur reseau lors du fetch pour {country_code}{nif}: {exc}")
+        index += 1
+        return row
+    except RuntimeError as exc:
+        _warn(f"Echec HTTP lors du fetch pour {country_code}{nif}: {exc}")
+        index += 1
+        return row
+    except Exception as exc:
+        _warn(f"Erreur inattendue lors du fetch pour {country_code}{nif}: {exc}")
+        index += 1
+        return row
+
     #writes down th name if it's been fetched
     if name:
         company = name.strip()
@@ -122,8 +139,8 @@ def main(vatDf : pd.DataFrame, DatasDf : pd.DataFrame, sirenDF : pd.DataFrame, l
     return DatasDf
 
 if __name__ == "__main__":
-    vatDf = pd.read_excel(r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-01-09_11-26_REPORT\vat\report_concatenated.xlsx").astype(str)
-    DatasDf = pd.read_excel(r"z:\MDM\998_CHecks\AUTOCHECKS\2026-01-09_11-26_REPORT\latest_datas.xlsx").astype(str)
-    SirenDF = pd.read_excel(r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-01-09_11-26_REPORT\siren_siret\latest_report.xlsx").astype(str)
+    vatDf = pd.read_excel(r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-02-20_03-02_REPORT\vat\report_concatenated.xlsx").astype(str)
+    DatasDf = pd.read_excel(r"z:\MDM\998_CHecks\AUTOCHECKS\2026-02-20_03-02_REPORT\latest_datas.xlsx").astype(str)
+    SirenDF = pd.read_excel(r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-02-20_03-02_REPORT\siren_siret\latest_report.xlsx").astype(str)
     result = main(vatDf, DatasDf, SirenDF)
     result.to_excel(OUTPUT, index=False)

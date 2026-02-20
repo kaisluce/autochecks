@@ -4,9 +4,19 @@ from typing import Optional
 import pandas as pd
 from openpyxl import load_workbook
 import xlsxwriter  # explicit import so PyInstaller bundles the Excel writer engine
+from pathlib import Path
+
+# Ensure project root is on sys.path so package imports work when run as a script.
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import forSirenSiret.requestsiren as rsn
 import forSirenSiret.requestsiret as rst
 from thefuzz import fuzz
+import emailing.siren_mail as siren_mail
+
+
 
 # Main SIREN/SIRET verification pipeline: builds Excel report with conditional formatting.
 
@@ -666,10 +676,11 @@ def generate_report(
 def main(
     output: pd.DataFrame,
     input_dir: str,
-    output_dir: str,
+    output_dir: Path,
     update_status=None,
     report_path: Optional[str] = None,
     logger=None,
+    send_mail: bool = False,
     ):
     try:
         generate_report(
@@ -680,6 +691,33 @@ def main(
             report_path=report_path,
             logger=logger,
             )
+        report_root = Path(output_dir).parent
+        siren_mail.main(path=report_root, logger=logger)
     except Exception as exc:
-        logger.error(f"Unexpected error in SIREN/SIRET verification pipeline: \n{exc}")
-        raise exc
+        msg = f"Unexpected error in SIREN/SIRET verification pipeline:\n{exc}"
+        if logger is not None and hasattr(logger, "error"):
+            logger.error(msg)
+        else:
+            print(msg)
+        raise
+
+if __name__ == "__main__":
+    df = pd.read_excel(
+        r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-02-16_12-04_REPORT\latest_datas.xlsx",
+        dtype=str,
+    )
+
+    mask = (
+        (df["missing siren"] == "False")
+        | (df["missing siret"] == "False")
+        | (df["VAT"].astype(str).str.startswith("FR"))
+        | (df["country"] == "FR")
+    )
+    df = df[mask]
+
+    df = df.head(20)
+
+    input_dir = r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-02-16_12-04_REPORT"
+    output_dir = Path(r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-02-16_12-04_REPORT\siren_siret")
+
+    main(output=df, input_dir=input_dir, output_dir=output_dir)

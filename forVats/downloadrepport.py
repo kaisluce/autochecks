@@ -1,5 +1,8 @@
 """Module to download VAT validation report documents using a token."""
 
+import csv
+import os
+
 import requests
 
 def get_document(token):
@@ -28,7 +31,7 @@ def get_document(token):
     }
 
     # send the GET request and return the response
-    return requests.get(url, headers=headers)
+    return requests.get(url, headers=headers, timeout=30)
 
 
 def main(token, output_path):
@@ -49,3 +52,29 @@ def main(token, output_path):
 
     # return the output path for confirmation
     return output_path
+
+
+def _iter_tokens(token_csv_path):
+    with open(token_csv_path, newline="", encoding="utf8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            token = (row.get("token") or "").strip()
+            batch_file = (row.get("batch_file") or "").strip()
+            if token:
+                yield batch_file, token
+
+
+if __name__ == "__main__":
+    report_dir = r"Z:\MDM\998_CHecks\AUTOCHECKS\2026-01-14_10-01_REPORT\vat"
+    token_csv = os.path.join(report_dir, "tokens.csv")
+    reports_dir = os.path.join(report_dir, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+
+    if os.path.exists(token_csv):
+        for batch_file, token in _iter_tokens(token_csv):
+            output_name = f"{os.path.splitext(batch_file)[0]}_report.xlsx" if batch_file else f"{token}_report.xlsx"
+            main(token, os.path.join(reports_dir, output_name))
+    else:
+        token = input("Token: ").strip()
+        output_path = os.path.join(reports_dir, f"{token}_report.xlsx")
+        main(token, output_path)

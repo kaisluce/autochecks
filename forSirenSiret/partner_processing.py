@@ -163,6 +163,7 @@ def build_partner_dataset(
         quoting=csv.QUOTE_NONE,
         on_bad_lines="skip",
         dtype=str,
+        names=["Business Partner", "Addr. No."],
     ).astype(str)
     join_table = _coerce_id_columns(join_table)
     join_table = join_table[["Business Partner", "Addr. No."]]

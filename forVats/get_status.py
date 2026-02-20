@@ -21,4 +21,4 @@ def get_status(token):
     }
      
     # send the GET request and return the response
-    return requests.get(url, headers=headers)
+    return requests.get(url, headers=headers, timeout=20)

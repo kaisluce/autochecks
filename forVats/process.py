@@ -1,15 +1,23 @@
 """Processing pipeline for VAT batch checks without tkinter dependencies."""
 
 import os
+import sys
 import time
+from pathlib import Path
 
 import openpyxl
 import pandas as pd
+
+# Ensure project root is on sys.path so imports work whether run as module or script.
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import forVats.checkcomplete as cc
 import forVats.concat as ct
 import forVats.multibash as mb
 import forVats.reformate as rf
+import emailing.vat_mail as vat_mail
 from forVats.rebuild import rebuild
 
 
@@ -90,7 +98,7 @@ def load_tokens_from_csv(token_path: str, logger=None) -> dict:
 def process(
     df: pd.DataFrame,
     vat_column: str,
-    output_dir: str,
+    output_dir: Path | str,
     requester_vat: str = "FR75383926409",
     progress_callback=None,
     logger=None,
@@ -106,6 +114,7 @@ def process(
     """
     _info, _warn, _debug, _error = _logger_helpers(logger)
     progress = progress_callback or (lambda message: None)
+    output_dir = Path(output_dir)
     os.makedirs(output_dir / "data", exist_ok=True)
 
     _info(f"VAT process started for column '{vat_column}' in {output_dir}")
@@ -132,7 +141,10 @@ def process(
 
     _info("Rebuilding exit data")
     rebuild(output_dir, df, logger=logger)
-    
+
+    _info("Step 5: Sending mails")
+    vat_mail.main(path=output_dir.parent, logger=logger)
+
     progress("Processing completed!")
     _info("VAT processing completed")
     return responses
@@ -176,18 +188,34 @@ def continue_process(directory: str, progress_callback=None, logger=None):
 
 
 def main(
-    filepath: str,
+    df: pd.DataFrame,
     vat_column: str,
-    output_dir: str,
+    output_dir: Path | str,
     requester_vat: str = "FR75383926409",
     progress_callback=None,
     logger=None,
 ):
     """
     Alias for ``process`` to preserve the previous entry point name.
+    Signature intentionally mirrors ``process``.
     """
     try:
-        return process(filepath, vat_column, output_dir, requester_vat, progress_callback, logger)
+        return process(df, vat_column, output_dir, requester_vat, progress_callback, logger)
     except Exception as exc:
-        logger.error(f"Unexpected error in VAT verification pipeline: \n{exc}")
-        raise exc
+        if logger is not None and hasattr(logger, "error"):
+            logger.error(f"Unexpected error in VAT verification pipeline: \n{exc}")
+        raise
+
+if __name__ == "__main__":
+    report_root = Path(r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-02-16_12-04_REPORT")
+    
+    df = pd.read_excel(
+        report_root / "latest_datas.xlsx",
+        dtype=str,
+    )
+
+    main(
+        df=df,
+        vat_column="VAT",
+        output_dir=report_root / "vat",
+    )
