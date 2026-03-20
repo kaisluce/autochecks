@@ -8,28 +8,7 @@ import forVats.downloadrepport as do
 import forVats.get_status as gs
 from requests.exceptions import RequestException
 
-
-def _log_helpers(logger=None):
-    def _info(msg):
-        if logger is None:
-            print(f"[VATS] {msg}")
-        elif hasattr(logger, "log"):
-            logger.log(msg)
-        elif hasattr(logger, "info"):
-            logger.info(msg)
-        else:
-            logger(msg)
-
-    def _warn(msg):
-        if logger is None:
-            print(f"[VATS][WARN] {msg}")
-        elif hasattr(logger, "warn"):
-            logger.warn(msg)
-        elif hasattr(logger, "warning"):
-            logger.warning(msg)
-        else:
-            _info(f"[WARN] {msg}")
-    return _info, _warn
+from logger import log_helpers
 
 
 def main(responses: dict, work_dir: str, token_file: str, progress_callback=None, logger=None):
@@ -41,15 +20,15 @@ def main(responses: dict, work_dir: str, token_file: str, progress_callback=None
     :param token_file: Path to the CSV file storing batch tokens.
     :param progress_callback: Optional callable receiving progress messages.
     """
-    _info, _warn = _log_helpers(logger)
+    _debug, _log, _warn, _error = log_helpers(logger)
     progress = progress_callback or (lambda message: None)
 
     data_dir = os.path.join(work_dir, "data")
     reports_dir = os.path.join(work_dir, "reports")
 
-    _info("Checking completion...")
+    _log("Checking completion...")
     tries = 0
-    _info(f"Initial responses: {responses}")
+    _log(f"Initial responses: {responses}")
     os.makedirs(reports_dir, exist_ok=True)
 
     while True:
@@ -57,12 +36,12 @@ def main(responses: dict, work_dir: str, token_file: str, progress_callback=None
         completed = 0
         done = True
 
-        _info(f"Poll iteration {tries}")
+        _log(f"Poll iteration {tries}")
         filenb = 0
         for file, response in responses.items():
             status_str = str(response.get("status", "")).upper()
 
-            _info(f"Checking file {file}: status {status_str}")
+            _log(f"Checking file {file}: status {status_str}")
             if status_str == "REJECTED":
                 batch_path = os.path.join(data_dir, file)
                 _warn(f"Batch {file} rejected. Resubmitting...")
@@ -103,7 +82,7 @@ def main(responses: dict, work_dir: str, token_file: str, progress_callback=None
                     continue
                 responses[file]["data"] = status_json
 
-                _info(f"New status: {status_json.get('status', '(no status)').upper()}")
+                _log(f"New status: {status_json.get('status', '(no status)').upper()}")
 
                 if status_json.get("status", "").upper() == "COMPLETED" or status_json.get("percentage") == 100.0:
                     try:
@@ -117,7 +96,7 @@ def main(responses: dict, work_dir: str, token_file: str, progress_callback=None
                         done = False
                         continue
 
-                    _info(f"Batch file {file} completed.")
+                    _log(f"Batch file {file} completed.")
                     responses[file]["status"] = "COMPLETED"
                     progress(f"Downloaded report for file {filenb + 1}/{len(responses)}.")
                 else:
@@ -131,6 +110,6 @@ def main(responses: dict, work_dir: str, token_file: str, progress_callback=None
         time.sleep(10)
 
         if done:
-            _info("All batch files completed.")
+            _log("All batch files completed.")
             progress("All batch files completed.")
             break

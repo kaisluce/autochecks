@@ -3,37 +3,9 @@ import os
 import openpyxl
 import pandas as pd
 
+from logger import log_helpers
+
 FILESIZE = 50
-
-def _log_helpers(logger=None):
-    def _info(msg):
-        if logger is None:
-            print(f"[VATS] {msg}")
-        elif hasattr(logger, "log"):
-            logger.log(msg)
-        elif hasattr(logger, "info"):
-            logger.info(msg)
-        else:
-            logger(msg)
-
-    def _warn(msg):
-        if logger is None:
-            print(f"[VATS][WARN] {msg}")
-        elif hasattr(logger, "warn"):
-            logger.warn(msg)
-        elif hasattr(logger, "warning"):
-            logger.warning(msg)
-        else:
-            _info(f"[WARN] {msg}")
-
-    def _debug(msg):
-        if logger is None:
-            print(f"[VATS][DEBUG] {msg}")
-        elif hasattr(logger, "debug"):
-            logger.debug(msg)
-        else:
-            _info(f"[DEBUG] {msg}")
-    return _info, _warn, _debug
 
 def reformate(
     df: pd.DataFrame,
@@ -53,7 +25,7 @@ def reformate(
     :param requester_vat: VAT number of the requester.
     :param progress_callback: Optional callable receiving progress messages.
     """
-    _info, _warn, _debug = _log_helpers(logger)
+    _debug, _log, _warn, _error = log_helpers(logger)
     progress = progress_callback or (lambda message: None)
     data_dir = os.path.join(output_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -93,7 +65,7 @@ def reformate(
             new_df = pd.concat([new_df, newline])
             if num % FILESIZE == 0:
                 output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // FILESIZE:03d}.csv")
-                _info(f"{num} Saving {output_file} with {len(new_df)} entries")
+                _log(f"{num} Saving {output_file} with {len(new_df)} entries")
                 new_df.to_csv(output_file, index=False)
                 new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
             num += 1
@@ -111,6 +83,6 @@ def reformate(
         while new_df.shape[0] <= 3:
             new_df = pd.concat([new_df, new_line])
         output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // FILESIZE:03d}.csv")
-        _info(f"Saving {output_file} with {len(new_df)} entries")
+        _log(f"Saving {output_file} with {len(new_df)} entries")
         new_df.to_csv(output_file, index=False)
     progress(f"submitting {(num // FILESIZE) + 1} files.")

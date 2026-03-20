@@ -1,8 +1,23 @@
-/logs/*
-/.vscode/*
-/build/*
-/dist/*
-/__pycache__/*
-*/__pycache__/*
+# Excel
 *.xlsx
-*.pyc
+
+# Python cache
+__pycache__/
+**/__pycache__/
+**/__pycache__/*
+
+# Logs
+logs/
+**/logs/
+
+#dists et builds
+**/dist/
+**/build/
+
+# Certificats et config sensibles
+**/MDMPythonGraphV2.cer
+**/MDMPythonGraphV2.pfx
+**/config.cfg
+
+# vscodes files
+**/.vscode/

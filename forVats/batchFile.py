@@ -7,28 +7,7 @@ import forVats.get_status as gs
 import time
 from requests.exceptions import RequestException
 
-
-def _log_helpers(logger=None):
-    def _info(msg):
-        if logger is None:
-            print(f"[VATS] {msg}")
-        elif hasattr(logger, "log"):
-            logger.log(msg)
-        elif hasattr(logger, "info"):
-            logger.info(msg)
-        else:
-            logger(msg)
-
-    def _warn(msg):
-        if logger is None:
-            print(f"[VATS][WARN] {msg}")
-        elif hasattr(logger, "warn"):
-            logger.warn(msg)
-        elif hasattr(logger, "warning"):
-            logger.warning(msg)
-        else:
-            _info(f"[WARN] {msg}")
-    return _info, _warn
+from logger import log_helpers
 
 
 def submit_batch_file(batch_file, logger=None, max_retries: int = 5, retry_delay: int = 5):
@@ -39,11 +18,11 @@ def submit_batch_file(batch_file, logger=None, max_retries: int = 5, retry_delay
     :param max_retries: Maximum submission attempts before returning an error
     :param retry_delay: Delay in seconds between attempts
     """
-    _info, _warn = _log_helpers(logger)
+    _debug, _log, _warn, _error = log_helpers(logger)
     attempt = 0
     while attempt < max_retries:
         try:
-            _info(f"Submitting batch file {batch_file} (attempt {attempt}/{max_retries})")
+            _log(f"Submitting batch file {batch_file} (attempt {attempt}/{max_retries})")
             # sends the batch file
             upl = fh.upload_batch(batch_file)
             # checks for HTTP errors (retry 5xx, fail fast on 4xx)
@@ -137,10 +116,10 @@ def submit_batch_file(batch_file, logger=None, max_retries: int = 5, retry_delay
 
             # checks if the batch was accepted
             status = str(status_payload.get("status", "")).upper()
-            _info(f"Received status: {status or '(empty)'}")
+            _log(f"Received status: {status or '(empty)'}")
             if status.upper() == "PROCESSING":
                 # if not rejected, return the status
-                _info(f"Batch {batch_file} accepted, token {token}")
+                _log(f"Batch {batch_file} accepted, token {token}")
                 return {
                     "status": "PROCESSING",
                     "data": status_payload

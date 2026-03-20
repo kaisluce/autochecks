@@ -6,28 +6,7 @@ from pathlib import Path
 import openpyxl
 import pandas as pd
 
-
-def _log_helpers(logger=None):
-    def _info(msg):
-        if logger is None:
-            print(f"[VATS] {msg}")
-        elif hasattr(logger, "log"):
-            logger.log(msg)
-        elif hasattr(logger, "info"):
-            logger.info(msg)
-        else:
-            logger(msg)
-
-    def _warn(msg):
-        if logger is None:
-            print(f"[VATS][WARN] {msg}")
-        elif hasattr(logger, "warn"):
-            logger.warn(msg)
-        elif hasattr(logger, "warning"):
-            logger.warning(msg)
-        else:
-            _info(f"[WARN] {msg}")
-    return _info, _warn
+from logger import log_helpers
 
 
 def main(work_dir: str, logger=None):
@@ -36,7 +15,7 @@ def main(work_dir: str, logger=None):
 
     :param work_dir: Base directory containing the ``reports`` folder.
     """
-    _info, _warn = _log_helpers(logger)
+    _debug, _log, _warn, _error = log_helpers(logger)
 
     reports_dir = Path(work_dir) / "reports"
     output_file = Path(work_dir) / "report_concatenated.xlsx"
@@ -48,7 +27,7 @@ def main(work_dir: str, logger=None):
             continue
 
         file_path = reports_dir / file_name
-        _info(f"Reading {file_name}")
+        _log(f"Reading {file_name}")
 
         df = pd.read_excel(file_path, dtype=str)
         df["__source_file__"] = file_name
@@ -60,4 +39,4 @@ def main(work_dir: str, logger=None):
 
     merged = pd.concat(all_dfs, ignore_index=True)
     merged.to_excel(output_file, index=False)
-    _info(f"Fichier final cree : {output_file}")
+    _log(f"Fichier final cree : {output_file}")

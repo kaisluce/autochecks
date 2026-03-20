@@ -13,10 +13,8 @@ if str(ROOT) not in sys.path:
 
 import fetchNames.get_names_from_last_report as get_names
 
-if __name__ == "__main__":
-    import mailtemplate as mailtemplate
-else:
-    import emailing.mailtemplate as mailtemplate
+from mails import send_quality_check_mail
+from logger import logger, log_helpers
 
 
 load_dotenv()
@@ -26,28 +24,11 @@ DIRECTORY_LOCATION = os.path.join(os.getenv("DIRECTORY_LOCATION", ""), "2025-12-
 ID_COLUMNS = ("BP", "Business Partner", "siren", "siret")
 
 
-def _logger_helpers(logger=None):
-    def _info(msg: str):
-        if logger is None:
-            print(f"[MAIL] {msg}")
-        elif hasattr(logger, "log"):
-            logger.log(msg)
-        elif hasattr(logger, "info"):
-            logger.info(msg)
-        else:
-            logger(msg)
-
-    def _warn(msg: str):
-        if logger is None:
-            print(f"[MAIL][WARN] {msg}")
-        elif hasattr(logger, "warn"):
-            logger.warn(msg)
-        elif hasattr(logger, "warning"):
-            logger.warning(msg)
-        else:
-            _info(f"[WARN] {msg}")
-
-    return _info, _warn
+MAIL_BODY = """
+    Bonjour,<br>
+    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners présentant potentiellement un nom mal enregistré ou manquant.<br>
+    Bonne journée.
+    """
 
 
 def _coerce_id_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -62,28 +43,29 @@ def get_wrong_name(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _save_df(df: pd.DataFrame, path: str, logger=None):
-    _info, _warn = _logger_helpers(logger)
+    debug, log, warn, error = log_helpers(logger)
     with pd.ExcelWriter(path, engine="xlsxwriter", mode="w") as writer:
         df.to_excel(writer, index=False, sheet_name="Report", header=True)
-    _info(f"Saved {len(df)} rows to {path}")
+    log(f"Saved {len(df)} rows to {path}")
 
 
-def _send_with_file(file_path: str, logger=None) -> None:
-    _info, _warn = _logger_helpers(logger)
-    subject = Path(file_path).stem
-    _info(f"Sending email with attachment: {file_path}")
-    asyncio.run(mailtemplate.main(subject, file_path, logger=logger))
-
-
-def _send(subject: str, logger=None) -> None:
-    _info, _warn = _logger_helpers(logger)
-    _info(f"Sending email without attachment for subject={subject}")
-    asyncio.run(mailtemplate.main(subject, logger=logger))
+def send_mail(subject: str, file_path: str |None = None, logger=None) -> None:
+    debug, log, warn, error = log_helpers(logger)
+    if file_path == None:
+        log(f"Sending email without attachment for subject={subject}")
+    else:
+        log(f"Sending email with attachment: {file_path}")
+    send_quality_check_mail(
+        subject=subject,
+        body=MAIL_BODY,
+        file_path=file_path,
+        logger=logger
+        )
 
 
 def main(path: str, mail: bool = True, logger=None):
-    _info, _warn = _logger_helpers(logger)
-    _info("Starting names mail export")
+    debug, log, warn, error = log_helpers(logger)
+    log("Starting names mail export")
 
     siren_path = os.path.join(path, r"siren_siret\latest_report.xlsx")
     vat_path = os.path.join(path, r"vat\report_concatenated.xlsx")
@@ -106,19 +88,18 @@ def main(path: str, mail: bool = True, logger=None):
         if not wrong.empty:
             _save_df(wrong, wrong_path, logger=logger)
             if mail:
-                _send_with_file(wrong_path, logger=logger)
+                send_mail(subject="wrong_name", file_path=wrong_path, logger=logger)
         elif mail:
-            _info("No wrong_name anomalies; sending empty notification.")
-            _send("wrong_name", logger=logger)
+            log("No wrong_name anomalies; sending empty notification.")
+            send_mail(subject="wrong_name", logger=logger)
     except Exception as e:
-        _warn(f"Error while sending wrong_name mail :\n{e}")
+        warn(f"Error while sending wrong_name mail :\n{e}")
 
-    _info("Names mail export finished.")
+    log("Names mail export finished.")
 
 
 if __name__ == "__main__":
-    import logger
 
-    path = r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-02-13_03-02_REPORT_fortest"
-    logger = logger.logger(mail=True)
-    main(path=path, mail=False, logger=logger)
+    path = r"Z:\MDM\998_CHecks\BP-AUTOCHECKS\ARCHIVES\2026-03-19_03-02_REPORT"
+    logger = logger(mail=True, path=__file__, subject="test mails autocheck names")
+    main(path=path, mail=True, logger=logger)

@@ -6,7 +6,7 @@ from requests.exceptions import RequestException
 
 
 # Thin wrapper around the INSEE SIRENE API for SIREN lookups with retry logic.
-def _get_with_retry(url: str, delay: float = 3.0, max_duration: float = 600.0) -> rq.Response:
+def _get_with_retry(url: str, delay: float = 3.0, max_duration: float = 600.0, headers: dict = None) -> rq.Response:
     """
     Retry GET until success or max_duration (seconds) is reached.
     delay: seconds between attempts (default 3s)
@@ -18,7 +18,7 @@ def _get_with_retry(url: str, delay: float = 3.0, max_duration: float = 600.0) -
     while time.time() - start < max_duration:
         attempt += 1
         try:
-            resp = rq.get(url, timeout=10)
+            resp = rq.get(url, timeout=10, headers=headers)
             if resp.status_code >= 500:
                 print(f"[WARN] Retry {attempt}: HTTP {resp.status_code} for {url} (server error)")
                 time.sleep(delay)
@@ -80,3 +80,85 @@ def handlesiren(siren: str) -> Dict[str, Any]:
         return out
     else:
         return {"error": f"Failed to retrieve data for SIREN {siren}, status code: {response.status_code}"}
+
+_INFOGREFFE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+    "Origin": "https://www.infogreffe.fr",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "fr,fr-FR;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Ocp-Apim-Subscription-Key": "7f50925c359346ecb8913668e2637bd3",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+}
+
+def fallback_infogreffe(siren: str) -> Dict[str, Any]:
+    url = f"https://www.api.infogreffe.fr/athena/recherche-api/recherche/entreprises_etablissements?numero_identification={siren}&limit=10&offset=0"
+    response = _get_with_retry(url, headers=_INFOGREFFE_HEADERS)
+    if response.status_code == 200:
+        data = response.json()
+        if not data.get("data"):
+            return {"error": f"No data found for SIREN {siren} on infogreffe"}
+        item = data["data"][0]
+        adresse = item.get("adresse", {})
+        declaree = adresse.get("adresse_declaree", {})
+        naf = item.get("activite_naf", {})
+
+        ligne1 = declaree.get("ligne1") or ""
+        code_postal = declaree.get("code_postal") or ""
+        commune = declaree.get("bureau_distributeur") or ""
+        adresse_str = f"{ligne1}, {code_postal} {commune}".strip(", ")
+
+        out = {
+            "siren": item.get("numero_identification"),
+            "denomination": item.get("nom_entreprise"),
+            "status": item.get("etat") or "unknown",
+            "naf": naf.get("code"),
+            "naf_label": naf.get("libelle"),
+            "adresse": adresse_str,
+            "n_voie": None,
+            "voie": ligne1,
+            "code_postal": code_postal,
+            "commune": commune,
+            "siret_siege": f"{item.get('numero_identification')}{str(item.get('nic', '')).zfill(5)}" if item.get("nic") else None,
+        }
+
+        if item.get("etat") == "RADIEE":
+            out["date_cessation"] = item.get("date_radiation")
+
+        return out
+    else:
+        return {"error": f"Failed to retrieve data for SIREN {siren} on infogreffe, status code: {response.status_code}"}
+
+if __name__ == "__main__":
+    _SOCIETE_HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0",
+        "Accept": "*/*",
+        "Accept-Language": "fr,fr-FR;q=0.9,en;q=0.8",
+        "Referer": "https://www.societe.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
+
+    import re
+
+    _SOCIETE_HEADERS["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    _SOCIETE_HEADERS["Sec-Fetch-Mode"] = "navigate"
+    _SOCIETE_HEADERS["Sec-Fetch-Site"] = "none"
+    _SOCIETE_HEADERS["Sec-Fetch-Dest"] = "document"
+
+    for siren in ["780095295", "552081317"]:
+        url = f"https://www.societe.com/societe/fiche-{siren}.html"
+        resp = rq.get(url, headers=_SOCIETE_HEADERS, timeout=10)
+        print(f"\n--- {siren} | {resp.status_code} ---")
+        if resp.status_code == 200:
+            html = resp.text
+            for keyword in ["radiée", "Active", "cessée", "en activité", "fermée", "dissout"]:
+                matches = [(m.start(), html[max(0,m.start()-60):m.end()+60]) for m in re.finditer(keyword, html, re.IGNORECASE)]
+                if matches:
+                    print(f"  [{keyword}] trouvé {len(matches)}x — ex: ...{matches[0][1]}...")
+        else:
+            print(resp.text[:200])

@@ -4,28 +4,7 @@ import os
 
 import forVats.batchFile as bf
 
-
-def _log_helpers(logger=None):
-    def _info(msg):
-        if logger is None:
-            print(f"[VATS] {msg}")
-        elif hasattr(logger, "log"):
-            logger.log(msg)
-        elif hasattr(logger, "info"):
-            logger.info(msg)
-        else:
-            logger(msg)
-
-    def _warn(msg):
-        if logger is None:
-            print(f"[VATS][WARN] {msg}")
-        elif hasattr(logger, "warn"):
-            logger.warn(msg)
-        elif hasattr(logger, "warning"):
-            logger.warning(msg)
-        else:
-            _info(f"[WARN] {msg}")
-    return _info, _warn
+from logger import log_helpers
 
 def main(
     work_dir: str,
@@ -44,7 +23,7 @@ def main(
     :param specific_files: Optional list of specific files to process.
     :param progress_callback: Optional callable receiving progress messages.
     """
-    _info, _warn = _log_helpers(logger)
+    _debug, _log, _warn, _error = log_helpers(logger)
     progress = progress_callback or (lambda message: None)
     data_dir = os.path.join(work_dir, "data")
 
@@ -57,7 +36,7 @@ def main(
         file_mode = "w"
         write_header = True
 
-    _info(f"Preparing to submit {len(batch_files)} batch files from {data_dir}")
+    _log(f"Preparing to submit {len(batch_files)} batch files from {data_dir}")
     with open(token_file_path, file_mode, encoding="utf8") as f:
         if write_header:
             f.write("batch_file,token\n")
@@ -70,7 +49,7 @@ def main(
                 responses[file] = batch
                 f.write(f"{file},{batch['data'].get('token')}\n")
                 f.flush()
-                _info(f"Batch file {file} submitted successfully.")
+                _log(f"Batch file {file} submitted successfully.")
                 progress(f"Submitting files ({batch_index + 1}/{len(batch_files)})...")
-    _info("All batch files submitted.")
+    _log("All batch files submitted.")
     return responses

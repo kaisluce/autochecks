@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 import forSirenSiret.partner_processing as pp
 from forSirenSiret.checks import main as SSmain
 import forVats.process as vat_process
-import logger as log
+
+from logger import logger, log_helpers
 
 import emailing.mail_export as me
 
@@ -58,9 +59,9 @@ def detect_skiprows(file_path: Path) -> int:
 
 def main():
     
-    logger = log.logger(mail=True)
-    logger.log("Logger succesfully created")
-    logger.log("Starting Process")
+    log = logger(mail=True, path=__file__, subject="autocheck report")
+    log.log("Logger succesfully created")
+    log.log("Starting Process")
     try:
 
         (
@@ -72,12 +73,12 @@ def main():
             join_path,
             adress_path
             )= create_paths()
-        logger.debug(f"Paths resolved: input={input_path} names={names_path} join={join_path} adress={adress_path} out={output_dir}")
+        log.debug(f"Paths resolved: input={input_path} names={names_path} join={join_path} adress={adress_path} out={output_dir}")
         skip = detect_skiprows(
             input_path
             )
         if skip:
-            logger.warn(f"Skiprows detected ({skip}) for input file, possible header anomaly.")
+            log.warn(f"Skiprows detected ({skip}) for input file, possible header anomaly.")
         df = pd.read_csv(
             input_path,
             sep=";",
@@ -89,7 +90,7 @@ def main():
             on_bad_lines="skip",
             engine="python",
         )
-        logger.debug(f"Raw input loaded: {len(df)} rows")
+        log.debug(f"Raw input loaded: {len(df)} rows")
         df["value"] = df["value"].astype(str)
         dffr = df[df["type"].isin(["FR0", "FR1", "FR2"])].copy()
         dfeu = df[df["type"].isin([
@@ -137,7 +138,7 @@ def main():
         # Ensure the VAT column exists even if FR0 was missing from the source file
         if "VAT" not in df.columns:
             df["VAT"] = ""
-            logger.warn("VAT column missing after pivot; created empty VAT column.")
+            log.warn("VAT column missing after pivot; created empty VAT column.")
 
         merged, merged_path = pp.build_partner_dataset(
             df=df,
@@ -145,9 +146,9 @@ def main():
             output_dir=output_dir,
             join_table_path=join_path,
             address_table_path=adress_path,
-            logger=logger,
+            logger=log,
             )
-        logger.log(f"Partner dataset built: {merged_path} ({len(merged)} rows)")
+        log.log(f"Partner dataset built: {merged_path} ({len(merged)} rows)")
         # print(merged.describe())
         # Prepare subset needing SIREN/SIRET verification (skip pure FR VATs), then run both flows in parallel.
         # Normalize VAT/country before filtering to avoid misses due to casing/spacing.
@@ -158,8 +159,8 @@ def main():
         ]
         # siren_df = siren_df.head(90)
         # merged = merged.head(90)
-        logger.debug(siren_df.describe())
-        logger.debug(f"SIREN/SIRET candidate rows: {len(siren_df)} / {len(merged)}")
+        log.debug(siren_df.describe())
+        log.debug(f"SIREN/SIRET candidate rows: {len(siren_df)} / {len(merged)}")
         # Run both flows in parallel and propagate worker exceptions to main thread.
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {
@@ -168,14 +169,14 @@ def main():
                     output=siren_df,
                     input_dir=output_dir,
                     output_dir=siren_directory,
-                    logger=logger,
+                    logger=log,
                 ): "SIREN/SIRET",
                 executor.submit(
                     vat_process.main,
                     df=merged,
                     vat_column="VAT",
                     output_dir=VAT_directory,
-                    logger=logger,
+                    logger=log,
                 ): "VAT",
             }
 
@@ -183,16 +184,16 @@ def main():
                 flow_name = futures[future]
                 try:
                     future.result()
-                    logger.log(f"{flow_name} flow completed successfully.")
+                    log.log(f"{flow_name} flow completed successfully.")
                 except Exception:
-                    logger.error(f"{flow_name} flow failed", exc_info=True)
+                    log.error(f"{flow_name} flow failed", exc_info=True)
                     raise
 
-        logger.log("SIREN/SIRET and VAT processing completed")
+        log.log("SIREN/SIRET and VAT processing completed")
         # Export anomalies and optionally send by email.
-        me.main(output_dir, logger=logger)
+        me.main(output_dir, logger=log)
     except Exception as exc:
-        logger.error("Unexpected error", exc_info=True)
+        log.error("Unexpected error", exc_info=True)
         raise
     
 

@@ -8,5 +8,20 @@
 - Gérer les erreurs HTTP/réseau dans le flux `fetchNames` pour ne pas casser tout le traitement {cm:2026-02-05} {h}
 - Améliorer la remontée d'erreur finale de `handcheck.py` (garder traceback exploitable) {cm:2026-02-05} {h}
 
-vérifier que les mails c bon {cm:2026-02-16}
-mettre a jour drom et COM
+Missing ZLOT {cm:2026-03-16} {h} {h}
+Missing ZLOT prod {cm:2026-03-16} {h}
+payements
+street drop 10000010 et 12 {cm:2026-03-17} {h}
+comprendre ce qu'elle veut dire par histoire d'heure {cm:2026-03-17} {h}
+caractere speciaux gpm assignation {cm:2026-03-17} {h}
+product hierarchy a expliquer pour la Nième fois {cm:2026-03-17}
+street quand Name 1 vide, chercher la langue dans correspondance language {cm:2026-03-17} {h}
+sales users, demander c quoi le pb
+orthographe hscodes(avaliable) {cm:2026-03-17} {h}
+concat last et first name dans les cas ou name est vide {cm:2026-03-17} {h}
+renommer customer vue credit vue {cm:2026-03-17}
+renommer diag hscodes (incorrect input = format issue, col name = present in tables {cm:2026-03-17}
+prod hierarchy consistency
+prod new hierarchy
+prod credit vue
+prod street language
