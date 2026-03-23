@@ -103,6 +103,111 @@ def build_partner_dataset(
             return False
         s = str(value).strip()
         return s not in {"0000", "00000", "9999", "99999"}
+    
+    
+
+    def import_raw_csv(path: str) -> pd.DataFrame:
+        return pd.read_csv(
+            path,
+            sep=";",
+            dtype=str,
+            quoting=csv.QUOTE_NONE,
+            on_bad_lines="skip",
+            engine="python",
+            header=0,
+        ).astype(str)
+
+    def load_info_csv(path: str) -> pd.DataFrame:
+        df = import_raw_csv(path)
+        
+        expected_cols = [
+            "Business Partner",
+            "Grp.",
+            "Arch. Flag",
+            "Central",
+            "AGrp",
+            "Search Term 1",
+            "Search Term 2",
+            "Name 1",
+            "Ext. No.",
+            "CatP",
+            "Name 2",
+            "Last Name",
+            "First Name",
+            "Date",
+            "User",
+            "Name 3",
+            "Name 4",
+            "Date.1",
+            "User.1",
+        ]
+        if len(df.columns) >= len(expected_cols):
+            df.columns = expected_cols + list(df.columns[len(expected_cols):])
+        coerced = _coerce_id_columns(df)
+        if "Business Partner" in coerced.columns:
+            coerced["Business Partner"] = coerced["Business Partner"].apply(_normalize_bp_value)
+        return coerced
+
+    def load_but020_csv(path: str) -> pd.DataFrame:
+        but020 = import_raw_csv(path)
+        but020 = but020.iloc[:, :2]
+        but020.columns = ["Business Partner", "Addr. No."]
+        coerced_but020 = _coerce_id_columns(but020)
+        coerced_but020 = coerced_but020.sort_values(by=["Business Partner", "Addr. No."], ascending=[True, False])
+        droped_but020 = coerced_but020.drop_duplicates(subset=["Business Partner"])
+        return droped_but020
+
+    def load_adress_table(path: str) -> pd.DataFrame:
+        adrc = import_raw_csv(path)
+        coerced_adrc = _coerce_id_columns(adrc)
+        if coerced_adrc.empty:
+            _log_warn(f"Address table empty or unreadable: {path}")
+        elif len(coerced_adrc.columns) < 30:
+            _log_warn(f"Address table has unexpected format ({len(coerced_adrc.columns)} columns), skipping address merge.")
+            return pd.DataFrame(columns=["Addr. No."])
+        else:
+            coerced_adrc = coerced_adrc.iloc[:, [0, 4, 5, 11, 20, 26, 29]]
+            new_adrc_columns_names = ["Addr. No.", "postcode", "city", "country", "street5", "street", "street4"]
+            coerced_adrc.columns = new_adrc_columns_names
+            missing_cols = set(["street", "street4", "street5", "city", "postcode", "country"]) - set(coerced_adrc.columns)
+            if missing_cols:
+                _log_warn(f"Missing address columns: {sorted(missing_cols)}")
+        return coerced_adrc.drop_duplicates(subset=["Addr. No."])
+    
+    def _enrich_row(row: pd.Series, df: pd.DataFrame) -> pd.DataFrame:
+        """Fusionne une ligne avec les données SIREN/SIRET calculées par tp.main."""
+        partner = row.get("BP")
+        part_data = tp.main(partner, df)
+        merged_row = row.to_dict()
+        merged_row.update(part_data)
+        return pd.DataFrame([merged_row]).astype(str)
+
+    def _append_row_to_excel(writer: pd.ExcelWriter, newline: pd.DataFrame) -> None:
+        """Écrit une ligne à la suite dans la feuille Sheet1 du fichier Excel ouvert."""
+        newline.to_excel(
+            writer,
+            index=False,
+            header=False,
+            startrow=writer.sheets["Sheet1"].max_row
+        )
+
+    def _build_output(df: pd.DataFrame, output: pd.DataFrame, output_path: str) -> pd.DataFrame:
+        """Itère sur df, enrichit chaque partenaire unique et l'écrit incrémentalement dans Excel."""
+        done = []
+        df_length = len(df)
+        update_status("Building partner dataset...")
+        _log_info(f"Building partner dataset: {df_length} input rows, output -> {output_path}")
+        with pd.ExcelWriter(output_path, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
+            for row_id, row in df.iterrows():
+                partner = row.get("BP")
+                update_status(f"Partenaire {row_id+1}/{df_length} : {partner}")
+                if partner not in done:
+                    newline = _enrich_row(row, df)
+                    output = pd.concat([output, newline], ignore_index=True)
+                    _append_row_to_excel(writer, newline)
+                done.append(partner)
+        return output
+    
 
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "latest_datas.xlsx")
@@ -112,42 +217,7 @@ def build_partner_dataset(
     _log_debug(f"Initialized datas file at {output_path}")
 
     # Lecture du fichier infos (CSV séparé par ;), en ignorant les lignes malformées.
-    infos = pd.read_csv(
-        infos_path,
-        sep=";",
-        dtype=str,
-        quoting=csv.QUOTE_NONE,
-        on_bad_lines="skip",
-        engine="python",
-        header=0,
-    ).astype(str)
-    expected_cols = [
-        "Business Partner",
-        "Grp.",
-        "Arch. Flag",
-        "Central",
-        "AGrp",
-        "Search Term 1",
-        "Search Term 2",
-        "Name 1",
-        "Ext. No.",
-        "CatP",
-        "Name 2",
-        "Last Name",
-        "First Name",
-        "Date",
-        "User",
-        "Name 3",
-        "Name 4",
-        "Date.1",
-        "User.1",
-    ]
-    if len(infos.columns) >= len(expected_cols):
-        infos.columns = expected_cols + list(infos.columns[len(expected_cols):])
-    infos = _coerce_id_columns(infos)
-    if "Business Partner" in infos.columns:
-        infos["Business Partner"] = infos["Business Partner"].apply(_normalize_bp_value)
-    _log_debug(f"Infos file loaded: {infos_path} ({len(infos)} rows)")
+    infos = load_info_csv(infos_path)
     
     print(infos.describe())
     df = _coerce_id_columns(df)
@@ -156,89 +226,17 @@ def build_partner_dataset(
     df = mt.merge_df(df, infos)
     _log_debug(f"Merged base dataframe with infos : \n{df.describe()}")
     
-    join_table = pd.read_csv(
-        join_table_path,
-        sep=";",
-        engine="python",
-        quoting=csv.QUOTE_NONE,
-        on_bad_lines="skip",
-        dtype=str,
-        names=["Business Partner", "Addr. No."],
-    ).astype(str)
-    join_table = _coerce_id_columns(join_table)
-    join_table = join_table[["Business Partner", "Addr. No."]]
-    join_table = join_table.sort_values(by=["Business Partner", "Addr. No."], ascending=[True, False])
-    join_table = join_table.drop_duplicates(subset=["Business Partner"])
-    address_table = pd.read_csv(
-        address_table_path,
-        sep=";",
-        engine="python",
-        quoting=csv.QUOTE_NONE,
-        on_bad_lines="skip",
-        dtype=str,
-    )
-    address_table = _coerce_id_columns(address_table)
-    if address_table.empty:
-        _log_warn(f"Address table empty or unreadable: {address_table_path}")
-    elif len(address_table.columns) < 30:
-        _log_warn(f"Address table has unexpected format ({len(address_table.columns)} columns), skipping address merge.")
-        address_table = pd.DataFrame(columns=["Addr. No."])
-    else:
-        rename_map = {
-            address_table.columns[0]: "Addr. No.",
-            address_table.columns[26]: "street",
-            address_table.columns[29]: "street4",
-            address_table.columns[20]: "street5",
-            address_table.columns[5]: "city",
-            address_table.columns[4]: "postcode",
-            address_table.columns[11]: "country",
-        }
-        address_table.rename(columns=rename_map, inplace=True)
-        keep_columns = [col for col in ("Addr. No.", "street", "street4", "street5", "city", "postcode", "country") if col in address_table.columns]
-        address_table = address_table[keep_columns]
-        missing_cols = set(["street", "street4", "street5", "city", "postcode", "country"]) - set(address_table.columns)
-        if missing_cols:
-            _log_warn(f"Missing address columns: {sorted(missing_cols)}")
+    join_table = load_but020_csv(join_table_path)
     
+    address_table = load_adress_table(address_table_path)
     
     address_table = pd.merge(left=join_table, right=address_table, on="Addr. No.", how="left")
-    
-    
     
     # Normaliser les types pour la jointure adresse.
     if not address_table.empty:
         address_table.iloc[:, 0] = address_table.iloc[:, 0].astype(str)
-    done = []
-    n_df = len(df)
 
-    update_status("Building partner dataset...")
-    _log_info(f"Building partner dataset: {n_df} input rows, output -> {output_path}")
-    with pd.ExcelWriter(output_path, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
-        for i, row in df.iterrows():
-            partner = row.get("BP")
-
-            if update_status:
-                update_status(f"Partenaire {i+1}/{n_df} : {partner}")
-
-            if partner not in done:
-                # Conserver les colonnes du merge (nom, pays...) et y ajouter les infos SIREN/SIRET calculées
-                part_data = tp.main(partner, df)
-                merged_row = row.to_dict()
-                merged_row.update(part_data)
-                newline = pd.DataFrame([merged_row]).astype(str)
-                # newline = merge_address(newline, join_table, address_table)
-                output = pd.concat([output, newline], ignore_index=True)
-
-                output.tail(1).to_excel(
-                    writer,
-                    index=False,
-                    header=False,
-                    startrow=writer.sheets["Sheet1"].max_row
-                )
-                
-
-            done.append(partner)
-
+    output = _build_output(df, output, output_path)
     
     # Filtre optionnel : exclure les lignes dont le nom contient "snetor".
     name_col = "Name 1" if "Name 1" in output.columns else "Name1"
@@ -288,3 +286,5 @@ def build_partner_dataset(
     _log_info(f"Final partner dataset saved: {output_path} ({len(output)} rows)")
 
     return output, output_path
+
+        

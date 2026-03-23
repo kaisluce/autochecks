@@ -25,6 +25,30 @@ def reformate(
     :param requester_vat: VAT number of the requester.
     :param progress_callback: Optional callable receiving progress messages.
     """
+    def _process_vat_column(values, new_df, num):
+        for value in values:
+            if value:
+                country_code = value[:2]
+                searched_vat = value[2:]
+                newline = pd.DataFrame(
+                    [
+                        {
+                            "MS Code": country_code,
+                            "VAT Number": searched_vat,
+                            "Requester MS Code": rq_c_code,
+                            "Requester VAT Number": rq_vat_number,
+                        }
+                    ]
+                )
+                new_df = pd.concat([new_df, newline])
+                if num % FILESIZE == 0:
+                    output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // FILESIZE:03d}.csv")
+                    _log(f"{num} Saving {output_file} with {len(new_df)} entries")
+                    new_df.to_csv(output_file, index=False)
+                    new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
+                num += 1
+        return new_df, num
+    
     _debug, _log, _warn, _error = log_helpers(logger)
     progress = progress_callback or (lambda message: None)
     data_dir = os.path.join(output_dir, "data")
@@ -48,27 +72,7 @@ def reformate(
     num = 1
     output_base = os.path.splitext(os.path.basename("vat_data"))[0]
 
-    for value in df[column]:
-        if value:
-            country_code = value[:2]
-            searched_vat = value[2:]
-            newline = pd.DataFrame(
-                [
-                    {
-                        "MS Code": country_code,
-                        "VAT Number": searched_vat,
-                        "Requester MS Code": rq_c_code,
-                        "Requester VAT Number": rq_vat_number,
-                    }
-                ]
-            )
-            new_df = pd.concat([new_df, newline])
-            if num % FILESIZE == 0:
-                output_file = os.path.join(data_dir, f"{output_base}_part{(num - 1) // FILESIZE:03d}.csv")
-                _log(f"{num} Saving {output_file} with {len(new_df)} entries")
-                new_df.to_csv(output_file, index=False)
-                new_df = pd.DataFrame(columns=["MS Code", "VAT Number", "Requester MS Code", "Requester VAT Number"])
-            num += 1
+    new_df, num = _process_vat_column(df[column], new_df, num)
     if not new_df.empty:
         new_line = pd.DataFrame(
             [

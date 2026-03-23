@@ -117,7 +117,7 @@ def submit_batch_file(batch_file, logger=None, max_retries: int = 5, retry_delay
             # checks if the batch was accepted
             status = str(status_payload.get("status", "")).upper()
             _log(f"Received status: {status or '(empty)'}")
-            if status.upper() == "PROCESSING":
+            if status.upper() == "PROCESSING" or status.upper() == "COMPLETED":
                 # if not rejected, return the status
                 _log(f"Batch {batch_file} accepted, token {token}")
                 return {
