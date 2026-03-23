@@ -34,9 +34,7 @@ def main(partner, df: pd.DataFrame):
 
     siren = _normalize_identifier(siren_series.iloc[0] if not siren_series.empty else None)
     siret = _normalize_identifier(siret_series.iloc[0] if not siret_series.empty else None)
-    vat = vat_series.iloc[0].strip() if not vat_series.empty else None
-    if vat is not None and vat.lower() in ("nan", ""):
-        vat = None
+    vat = _normalize_identifier(vat_series.iloc[0] if not vat_series.empty else None)
 
     doubles_siret = df.loc[(df["siret"] == siret) & (df["BP"] != partner), "BP"].tolist()
     doubles_siren = df.loc[(df["siren"] == siren) & (df["BP"] != partner), "BP"].tolist()
