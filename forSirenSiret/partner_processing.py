@@ -219,7 +219,6 @@ def build_partner_dataset(
 
             if update_status:
                 update_status(f"Partenaire {i+1}/{n_df} : {partner}")
-            _log_debug(f"Processing partner {i+1}/{n_df}: {partner}")
 
             if partner not in done:
                 # Conserver les colonnes du merge (nom, pays...) et y ajouter les infos SIREN/SIRET calculées
@@ -236,7 +235,7 @@ def build_partner_dataset(
                     header=False,
                     startrow=writer.sheets["Sheet1"].max_row
                 )
-                _log_debug(f"Wrote partner row {i+1} to {output_path}")
+                
 
             done.append(partner)
 
