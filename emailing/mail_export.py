@@ -25,9 +25,7 @@ ID_COLUMNS = ("BP", "Business Partner", "siren", "siret")
 
 
 MAIL_BODY = """
-    Bonjour,<br>
-    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners présentant potentiellement un nom mal enregistré ou manquant.<br>
-    Bonne journée.
+    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners présentant potentiellement un nom mal enregistré ou manquant.
     """
 
 

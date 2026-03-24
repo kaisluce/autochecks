@@ -17,9 +17,7 @@ from logger import logger, log_helpers
 ID_COLUMNS = ("BP", "Business Partner", "siren", "siret")
 
 MAIL_BODY = """
-    Bonjour,<br>
-    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners ayant potentiellement un numéro de VAT invalide.<br>
-    Bonne journée.
+    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners ayant potentiellement un numéro de VAT invalide.
     """
 
 

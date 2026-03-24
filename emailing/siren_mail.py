@@ -16,21 +16,15 @@ from logger import logger, log_helpers
 ID_COLUMNS = ("BP", "Business Partner", "siren", "siret")
 
 MAIL_BODY_CLOSED_SIRET = """
-    Bonjour,<br>
-    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners présentant potentiellement un siret inactif.<br>
-    Bonne journée.
+    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners présentant potentiellement un siret inactif.
     """
 
 MAIL_BODY_CLOSED_SIREN = """
-    Bonjour,<br>
-    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners dont la société est potentiellement cessée.<br>
-    Bonne journée.
+    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners dont la société est potentiellement cessée.
     """
 
 MAIL_BODY_DUPLICATED_SIRET = """
-    Bonjour,<br>
-    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners présentant potentiellement un siret apparaissant sur plusieurs BP.<br>
-    Bonne journée.
+    Vous trouverez en pièce jointe le rapport recensant la liste des Business Partners présentant potentiellement un siret apparaissant sur plusieurs BP.
     """
 
 MAIL_BODIES = {
