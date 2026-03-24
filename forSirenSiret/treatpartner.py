@@ -23,6 +23,23 @@ def _normalize_identifier(value: str):
     digits = re.sub(r"\D", "", candidate)
     return digits or None
 
+def _normalize_vat(value: str):
+    """
+    Clean vats.
+    """
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if s.lower() == "nan" or s == "":
+        return ""
+    candidate = s.replace(",", ".")
+    try:
+        if "e" in candidate.lower() or "." in candidate:
+            candidate = format(Decimal(candidate), "f")
+    except InvalidOperation:
+        candidate = s
+    return candidate or ""
+
 
 def main(partner, df: pd.DataFrame):
     """
@@ -34,7 +51,7 @@ def main(partner, df: pd.DataFrame):
 
     siren = _normalize_identifier(siren_series.iloc[0] if not siren_series.empty else None)
     siret = _normalize_identifier(siret_series.iloc[0] if not siret_series.empty else None)
-    vat = vat_series.iloc[0] if not vat_series.empty else None
+    vat = _normalize_vat(vat_series.iloc[0] if not vat_series.empty else None)
 
     doubles_siret = df.loc[(df["siret"] == siret) & (df["BP"] != partner), "BP"].tolist()
     doubles_siren = df.loc[(df["siren"] == siren) & (df["BP"] != partner), "BP"].tolist()
@@ -62,7 +79,7 @@ def main(partner, df: pd.DataFrame):
         out["missing siren"] = True
     if siret is None:
         out["missing siret"] = True
-    if vat is None:
+    if vat is None or vat == "":
         out["Missing vat"] = True
 
     if siret and siren and siret[:9] != siren:
