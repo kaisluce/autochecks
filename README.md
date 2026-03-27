@@ -6,7 +6,7 @@ Headless pipeline that consolidates Business Partner identifiers, checks SIREN/S
 - One run triggers both flows in parallel: SIREN/SIRET verification and VAT batch validation.
 - Builds a clean partner dataset from SAP exports (pivot FR0/FR1/FR2 codes, normalize IDs, merge names and address tables) into `latest_datas.xlsx`.
 - SIRENE lookups flatten legal unit and establishment data, add duplicate and mismatch flags, and write a color-coded `latest_report.xlsx`.
-- VAT flow reformats values into batches of 100, uploads to VIES, polls tokens, downloads per-batch Excel files, concatenates them, and reattaches BP numbers.
+- VAT flow reformats values into batches of `50`, uploads to VIES, polls tokens, downloads per-batch Excel files, concatenates them, and reattaches BP numbers.
 - Name fetcher for German/Spanish VATs: calls the VAT search API, rebuilds `Fetched Name`, and compares against SAP names to flag differences.
 - Email step (Graph API + certificate auth) sends focused extracts: inactive SIRET/SIREN, duplicate SIRET, fuzzy name issues, invalid VATs.
 - Logging: every run writes a timestamped log file under `logs/`, capturing progress, warnings (input anomalies, fallbacks), and errors.
@@ -16,7 +16,7 @@ Headless pipeline that consolidates Business Partner identifiers, checks SIREN/S
 2) **Enrich partners** (`forSirenSiret.partner_processing.build_partner_dataset`): normalize IDs, merge the names file (`NAMES_FILE`), join address metadata (`JOIN_TABLE`, `ADRESS_TABLE`), detect duplicates/invalid lengths, and write `latest_datas.xlsx` under the dated output folder.
 3) **SIREN/SIRET checks** (`forSirenSiret.checks.generate_report`): decide SIREN vs SIRET vs both based on consistency, retry network errors, and append rows with conditional formatting into `siren_siret/latest_report.xlsx` (diagnostics include fuzzy name match).
 4) **VAT checks** (`forVats.process.process`): split the `VAT` column into CSV batches of 100, submit to VIES, poll tokens until `COMPLETED`, download each report, concatenate into `vat/report_concatenated.xlsx`, and add back BP IDs.
-5) **Mail exports** (`emailing/`): builds targeted extracts (`closed_siret.xlsx`, `closed_siren.xlsx`, `duplicated_siret.xlsx`, `wrong_name.xlsx`, `bad_vats.xlsx`) and sends them from the shared mailbox using the mails librairy.
+5) **Mail exports** (`emailing/`): builds targeted extracts (`closed_siret.xlsx`, `closed_siren.xlsx`, `duplicated_siret.xlsx`, `wrong_name.xlsx`, `bad_vats.xlsx`) and sends them from the shared mailbox using the mails library.
 
 ## Expected inputs
 - `.env` at repo root:
@@ -38,9 +38,9 @@ Typical formats read by `main.py` / `handcheck.py`:
   900080  ; 7,84E+08     ; FR2  ; 0
   900080  ; 7,84E+13     ; FR1  ; 0
   ```
-- With French headers (auto-detected delimiter, columns like “Partenaire”, “Cat. N° ID fiscale”, “N° ID fiscale”, “N° ID fiscale (long)”, …):
+- With French headers (auto-detected delimiter, columns like `Partenaire`, `Cat. N° ID fiscale`, `N° ID fiscale`, `N° ID fiscale (long)`, ...):
   ```
-  Partenaire,Cat. N° ID fiscale,N° ID fiscale,N° ID fiscale (long),...
+  Partenaire,Cat. NÂ° ID fiscale,NÂ° ID fiscale,NÂ° ID fiscale (long),...
   1000915,FR0,FR95790959096,,
   1000915,FR1,7909950900019,,
   1000915,FR2,790995096,,
@@ -52,12 +52,13 @@ Only the first 3 columns are used and renamed `BP`, `type`, `value`. EU codes en
 - `.../siren_siret/latest_report.xlsx`: SIREN/SIRET API results with status, NAF, address, duplicate lists, and diagnostic columns (`report`).
 - `.../vat/report_concatenated.xlsx`: merged VIES results with original source file names and BP linkage.
 - `.../fetchedNames.xlsx`: German/Spanish VAT name retrieval with `Fetched Name`, `SAP Name`, name match diagnosis, and scores.
-- `.../siren_siret/closed_siret.xlsx`, `.../closed_siren.xlsx`, `.../duplicated_siret.xlsx`, `.../wrong_name.xlsx`, `.../vat/bad_vats.xlsx`: anomaly extracts used by the mailer.
+- `.../wrong_name.xlsx`: subset of `fetchedNames.xlsx` where `name match diag` is neither `exact`, `Name not fetched`, nor `Missing name`.
+- `.../siren_siret/closed_siret.xlsx`, `.../siren_siret/closed_siren.xlsx`, `.../siren_siret/duplicated_siret.xlsx`, `.../vat/bad_vats.xlsx`: anomaly extracts used by the mailer.
 
 ### Output file structure (key columns)
 - `latest_datas.xlsx` (Sheet1):
   - Identifiers: `BP`, `siren`, `siret`, `VAT`
-  - Flags: `duplicates_siren`, `duplicates_siret`, `duplicates_VAT`, `missing siren`, `missing siret`, `Missing vat`, `Missmatching siren siret`, `Missmatching siren VAT`, `uses a snetor *`
+  - Flags: `duplicates_siren`, `duplicates_siret`, `duplicates_VAT`, `missing siren`, `missing siret`, `Missing_Vat`, `Missmatching siren siret`, `Missmatching siren VAT`, `uses a snetor *`
   - BP info / address: `Name 1`, `Grouping`, `Country/Region Key`, `Language Key`, `adressID`, `street`, `street4`, `street5`, `city`, `postcode`, `country`, `has_*`
 - `siren_siret/latest_report.xlsx` (sheet `Report`):
   - Identifiers: `BP`, `type` (siren/siret), `siret`, `nic`, `siren`
@@ -68,18 +69,61 @@ Only the first 3 columns are used and renamed `BP`, `type`, `value`. EU codes en
   - VIES columns: `MS Code`, `VAT Number`, `Requester MS Code`, `Requester VAT Number`, VIES validity/status fields
   - Local additions: `__source_file__` (origin batch), `BP` (list of BPs matching the VAT)
 
+## Repository tree
+```
+autochecks/
+|-- main.py
+|-- handcheck.py
+|-- handcheck.spec
+|-- README.md
+|-- requirements.txt
+|-- emailing/
+|   |-- mail_export.py
+|   |-- siren_mail.py
+|   |-- vat_mail.py
+|   `-- logs/
+|-- fetchNames/
+|   |-- compare_names.py
+|   |-- get_names_from_last_report.py
+|   `-- seacrh_name.py
+|-- forSirenSiret/
+|   |-- checks.py
+|   |-- merge_tables.py
+|   |-- partner_processing.py
+|   |-- requestsiren.py
+|   |-- requestsiret.py
+|   `-- treatpartner.py
+|-- forVats/
+|   |-- batchFile.py
+|   |-- checkcomplete.py
+|   |-- concat.py
+|   |-- downloadrepport.py
+|   |-- forceHTTP.py
+|   |-- get_status.py
+|   |-- multibash.py
+|   |-- process.py
+|   |-- rebuild.py
+|   `-- reformate.py
+`-- logs/
+```
+
 ## Output tree
 ```
 YYYY-MM-DD_HH-MM_REPORT/
-├─ latest_datas.xlsx           # consolidated partners
-├─ siren_siret/
-│  └─ latest_report.xlsx       # INSEE results with conditional formatting
-├─ vat/
-│  ├─ data/                    # CSV batches sent to VIES
-│  ├─ reports/                 # downloaded VIES Excel reports
-│  ├─ report_concatenated.xlsx # merged VIES reports
-│  └─ tokens.csv               # batch_file -> token mapping
-└─ (handcheck adds suffix `_HANDCHECK_REPORT`)
+|-- latest_datas.xlsx            # consolidated partners
+|-- fetchedNames.xlsx            # fetched DE/ES names + SAP comparison
+|-- wrong_name.xlsx              # subset of name mismatches
+|-- siren_siret/
+|   |-- latest_report.xlsx       # INSEE results with conditional formatting
+|   |-- closed_siret.xlsx
+|   |-- closed_siren.xlsx
+|   `-- duplicated_siret.xlsx
+`-- vat/
+    |-- data/                    # CSV batches sent to VIES
+    |-- reports/                 # downloaded VIES Excel reports
+    |-- report_concatenated.xlsx # merged VIES reports
+    |-- bad_vats.xlsx
+    `-- tokens.csv               # batch_file -> token mapping
 ```
 
 ## Workflow (summary)
@@ -91,26 +135,26 @@ YYYY-MM-DD_HH-MM_REPORT/
 ## Expected result (example)
 ```
 2025-12-22_11-57_REPORT/
-├─ latest_datas.xlsx
-├─ siren_siret/
-│  ├─ latest_report.xlsx
-│  ├─ duplicated_siret.xlsx
-│  ├─ closed_siret.xlsx
-│  └─ closed_siren.xlsx
-├─ vat/
-│  ├─ data/
-│  │  ├─ BP_TAXNUM_part000.csv
-│  │  ├─ BP_TAXNUM_part001.csv
-│  │  └─ ...
-│  ├─ reports/
-│  │  ├─ BP_TAXNUM_part000_report.xlsx
-│  │  ├─ BP_TAXNUM_part001_report.xlsx
-│  │  └─ ...
-│  ├─ report_concatenated.xlsx
-│  ├─ bad_vats.xlsx
-│  └─ tokens.csv
-├─ fetched_names.xlsx
-└─ wrong_fames.xlsx
+|-- latest_datas.xlsx
+|-- fetchedNames.xlsx
+|-- wrong_name.xlsx
+|-- siren_siret/
+|   |-- latest_report.xlsx
+|   |-- duplicated_siret.xlsx
+|   |-- closed_siret.xlsx
+|   `-- closed_siren.xlsx
+`-- vat/
+    |-- data/
+    |   |-- BP_TAXNUM_part000.csv
+    |   |-- BP_TAXNUM_part001.csv
+    |   `-- ...
+    |-- reports/
+    |   |-- BP_TAXNUM_part000_report.xlsx
+    |   |-- BP_TAXNUM_part001_report.xlsx
+    |   `-- ...
+    |-- report_concatenated.xlsx
+    |-- bad_vats.xlsx
+    `-- tokens.csv
 ```
 
 ## Handcheck mode (manual sample)
