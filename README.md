@@ -93,7 +93,10 @@ YYYY-MM-DD_HH-MM_REPORT/
 2025-12-22_11-57_REPORT/
 ├─ latest_datas.xlsx
 ├─ siren_siret/
-│  └─ latest_report.xlsx
+│  ├─ latest_report.xlsx
+│  ├─ duplicated_siret.xlsx
+│  ├─ closed_siret.xlsx
+│  └─ closed_siren.xlsx
 ├─ vat/
 │  ├─ data/
 │  │  ├─ BP_TAXNUM_part000.csv
@@ -104,8 +107,10 @@ YYYY-MM-DD_HH-MM_REPORT/
 │  │  ├─ BP_TAXNUM_part001_report.xlsx
 │  │  └─ ...
 │  ├─ report_concatenated.xlsx
+│  ├─ bad_vats.xlsx
 │  └─ tokens.csv
-└─ (closed/duplicate/etc. extracts are emailed when present)
+├─ fetched_names.xlsx
+└─ wrong_fames.xlsx
 ```
 
 ## Handcheck mode (manual sample)
