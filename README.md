@@ -16,7 +16,7 @@ Headless pipeline that consolidates Business Partner identifiers, checks SIREN/S
 2) **Enrich partners** (`forSirenSiret.partner_processing.build_partner_dataset`): normalize IDs, merge the names file (`NAMES_FILE`), join address metadata (`JOIN_TABLE`, `ADRESS_TABLE`), detect duplicates/invalid lengths, and write `latest_datas.xlsx` under the dated output folder.
 3) **SIREN/SIRET checks** (`forSirenSiret.checks.generate_report`): decide SIREN vs SIRET vs both based on consistency, retry network errors, and append rows with conditional formatting into `siren_siret/latest_report.xlsx` (diagnostics include fuzzy name match).
 4) **VAT checks** (`forVats.process.process`): split the `VAT` column into CSV batches of 100, submit to VIES, poll tokens until `COMPLETED`, download each report, concatenate into `vat/report_concatenated.xlsx`, and add back BP IDs.
-5) **Mail exports** (`emailing.mail_export`): build targeted extracts (`closed_siret.xlsx`, `closed_siren.xlsx`, `duplicated_siret.xlsx`, `wrong_name.xlsx`, `bad_vats.xlsx`) and send them from the shared mailbox.
+5) **Mail exports** (`emailing/`): builds targeted extracts (`closed_siret.xlsx`, `closed_siren.xlsx`, `duplicated_siret.xlsx`, `wrong_name.xlsx`, `bad_vats.xlsx`) and sends them from the shared mailbox using the mails librairy.
 
 ## Expected inputs
 - `.env` at repo root:
